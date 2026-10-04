@@ -1,5 +1,7 @@
 # Scan history database
 *.db
+evidence.json
+websec-evidence-*.json
 
 # Local configuration and private keys
 .env

@@ -91,4 +91,11 @@ def missing_baseline_scope(old: ScanReport, new: ScanReport) -> list[ScopeEntry]
             missing.append({
                 "surface": "api_selected", "requested_url": path, "final_url": path,
             })
+    if (old.js_discovery_status == "completed"
+            and new.js_discovery_status != "completed"):
+        missing.append({
+            "surface": "js_discovery",
+            "requested_url": old.url,
+            "final_url": old.final_url,
+        })
     return missing

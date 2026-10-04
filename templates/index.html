@@ -27,6 +27,7 @@
     <div class="checks">
       <label class="check-label"><input type="checkbox" name="owns" required {{ 'checked' if request.form.get('owns') else '' }}> Tôi có quyền kiểm tra website này</label>
       <label class="check-label"><input type="checkbox" name="no_osv" {{ 'checked' if request.form.get('no_osv') else '' }}> Bỏ tra cứu lỗ hổng thư viện qua OSV.dev</label>
+      <label class="check-label"><input type="checkbox" name="js_discovery" {{ 'checked' if request.form.get('js_discovery') == 'on' else '' }}> Khám phá liên kết SPA bằng JavaScript (tùy chọn)</label>
       <label class="check-label">Giới hạn trang <input class="page-limit" type="number" name="max_pages" min="1" max="30" value="{{ request.form.get('max_pages', '20') }}" aria-label="Số trang tối đa"></label>
       <label class="check-label">Thời gian tối đa <input class="page-limit" type="number" name="max_seconds" min="1" max="600" value="{{ request.form.get('max_seconds', '120') }}" aria-label="Thời gian quét tối đa tính bằng giây"> giây</label>
       <label class="check-label">Lockfile (tùy chọn) <input type="file" name="lockfile" accept=".json,.yaml" aria-label="package-lock.json hoặc pnpm-lock.yaml"></label>
@@ -82,7 +83,7 @@
       <p>OpenAPI chỉ được đọc để chọn route; công cụ không tự gọi route được phát hiện. Với path có <code>{id}</code>, nhập một giá trị cụ thể trước khi quét. Chỉ các GET trong danh sách endpoint mới được kiểm tra. Yêu cầu ẩn danh không mang cookie; mỗi endpoint còn nhận một OPTIONS preflight không mang phiên. Thêm <code>private </code> trước path nếu endpoint phải yêu cầu đăng nhập. Phiên A chỉ gửi tới path private hoặc GET mà OpenAPI khai báo cần xác thực, gồm một GET so sánh và một GET thử CORS với Origin lạ. Để so sánh hai tài khoản, chọn hai phiên khác nhau và trường JSON dự kiến riêng trên path <code>private</code>. Công cụ so sánh giá trị trong bộ nhớ, không lưu token hay nội dung phản hồi, không theo chuyển hướng. Hãy dùng tài khoản quyền thấp; nhập Cookie (ví dụ <code>session=...</code>) hoặc Bearer token, không nhập mật khẩu tài khoản.</p>
     </details>
   </form>
-  <p class="scan-scope">Có thể nhập localhost:3000 hoặc URL công khai. Lockfile được đọc cục bộ để tra OSV theo phiên bản chính xác; chỉ tên gói và phiên bản gửi tới OSV. Quét tối đa 30 trang cùng website; kết quả lưu trên máy này.</p>
+  <p class="scan-scope">Có thể nhập localhost:3000 hoặc URL công khai. Khám phá JavaScript dùng trình duyệt cô lập, chỉ tải script cùng website qua kết nối quét đã bảo vệ và không gọi API từ trang. Cài <code>requirements-browser.txt</code> để bật. Lockfile được đọc cục bộ để tra OSV theo phiên bản chính xác; chỉ tên gói và phiên bản gửi tới OSV. Quét tối đa 30 trang cùng website; kết quả lưu trên máy này.</p>
   {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 </section>
 
@@ -96,7 +97,7 @@
 {% if report %}
 <div id="report" class="result-heading">
   <div><span class="eyebrow">Kết quả kiểm tra</span><h2>Báo cáo cho website của bạn</h2></div>
-  {% if saved_id %}<div class="result-actions"><a class="text-btn" href="{{ url_for('view_scan', scan_id=saved_id) }}">Xem trong lịch sử</a><a class="text-btn" href="{{ url_for('export_scan', scan_id=saved_id) }}">Tải báo cáo HTML ↓</a></div>{% endif %}
+  {% if saved_id %}<div class="result-actions"><a class="text-btn" href="{{ url_for('view_scan', scan_id=saved_id) }}">Xem trong lịch sử</a><a class="text-btn" href="{{ url_for('export_evidence', scan_id=saved_id) }}">Tải bằng chứng JSON ↓</a><a class="text-btn" href="{{ url_for('export_scan', scan_id=saved_id) }}">Tải báo cáo HTML ↓</a></div>{% endif %}
 </div>
 {% include "_report.html" %}
 {% endif %}

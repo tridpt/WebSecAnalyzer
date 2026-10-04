@@ -14,7 +14,12 @@ from .api import (
     parse_api_targets, parse_comparison_fields, parse_openapi,
     validate_api_auth_transport, validate_openapi_path,
 )
-from .crawler import MAX_PAGES, crawl_pages
+from .crawler import MAX_PAGES, crawl_pages, is_html
+from .js_discovery import (
+    BrowserDiscoveryUnavailable, JsLinkDiscoverer, MAX_SCRIPT_REQUESTS,
+    MAX_SCRIPTS_PER_PAGE,
+)
+from .evidence import snapshot_response
 from .browser_cors import (
     BrowserCorsVerifier, BrowserUnavailable, check_browser_cors,
     validate_browser_options,
@@ -74,6 +79,11 @@ class ScanReport:
     api_cors_browser_enabled: bool = False
     api_cors_browser_requested: int = 0
     api_cors_browser_skipped_paths: list[str] = field(default_factory=list)
+    js_discovery_enabled: bool = False
+    js_discovery_status: str = "not_requested"
+    js_discovered_urls: int = 0
+    js_discovery_error: str | None = None
+    observations: list[dict] = field(default_factory=list)
 
     @property
     def issue_counts(self) -> dict[str, int]:
@@ -168,6 +178,17 @@ class ScanReport:
             api_cors_browser_skipped_paths=data.get("coverage", {}).get(
                 "api_cors_browser_skipped_paths", []
             ),
+            js_discovery_enabled=data.get("coverage", {}).get(
+                "js_discovery_enabled", False
+            ),
+            js_discovery_status=data.get("coverage", {}).get(
+                "js_discovery_status", "not_requested"
+            ),
+            js_discovered_urls=data.get("coverage", {}).get(
+                "js_discovered_urls", 0
+            ),
+            js_discovery_error=data.get("coverage", {}).get("js_discovery_error"),
+            observations=data.get("observations", []),
         )
         for cat in data.get("categories", []):
             result = CheckResult(category=cat["category"], error=cat.get("error"))
@@ -220,6 +241,7 @@ def scan(
     api_compare_fields: list[str] | None = None,
     browser_cors: bool = False,
     browser_cookie_attributes: str | None = None,
+    js_discovery: bool = False,
 ) -> ScanReport:
     """Scan at most 30 HTML pages on the final URL's origin."""
     if not isinstance(max_pages, int) or not 1 <= max_pages <= MAX_PAGES:
@@ -256,6 +278,16 @@ def scan(
     if api_second_credential == api_credential and api_second_credential is not None:
         raise InvalidTarget("Hai phiên thử nghiệm phải khác nhau.")
 
+    secrets_to_redact = [
+        credential.secret for credential in (api_credential, api_second_credential)
+        if credential is not None
+    ]
+
+    def capture(response: requests.Response, **kwargs) -> dict:
+        return snapshot_response(
+            response, redact_values=secrets_to_redact, **kwargs,
+        )
+
     dns = PinnedDNS(allow_private=allow_private, control=control)
     url = normalize_target(url, allow_private=allow_private, dns=dns)
     pacer = RequestPacer(
@@ -263,6 +295,8 @@ def scan(
         + len(compare_fields)
         + (1 if openapi_path else 0)
         + (3 * len(api_targets) if browser_cors else 0)
+        + (min(MAX_SCRIPT_REQUESTS, max_pages * MAX_SCRIPTS_PER_PAGE)
+           if js_discovery else 0)
     )
     session = guarded_session(dns)
     session.headers["User-Agent"] = USER_AGENT
@@ -274,12 +308,14 @@ def scan(
             initial_host=urlsplit(url).hostname,
             control=control,
         )
+        site_observations = [capture(first, purpose="site_root")]
         site_results = [
             check_tls(first.url, timeout=timeout, dns=dns, control=control),
             check_https_redirect(
                 session, first.url, timeout=timeout,
                 allow_private=allow_private, pacer=pacer,
-                control=control,
+                control=control, observations=site_observations,
+                redact_values=secrets_to_redact,
             ),
         ]
         probe_response = None
@@ -292,11 +328,46 @@ def scan(
             )
         except requests.RequestException:
             pass
-        page_responses, skipped = crawl_pages(
-            session, url, first, max_pages=max_pages, timeout=timeout,
-            allow_private=allow_private, pacer=pacer,
-            control=control,
-        )
+        js_browser = None
+        js_status = "not_requested"
+        js_error = None
+        if js_discovery:
+            js_status = "completed" if is_html(first) else "unavailable"
+            if is_html(first):
+                js_browser = JsLinkDiscoverer(
+                    dns=dns, pacer=pacer, control=control, timeout=timeout,
+                    allow_private=allow_private, site_origin=origin(first.url),
+                    user_agent=USER_AGENT,
+                )
+                try:
+                    js_browser.start()
+                except BrowserDiscoveryUnavailable as exc:
+                    js_status = "unavailable"
+                    js_error = str(exc)
+                    js_browser = None
+
+        def discover_rendered(response: requests.Response) -> list[str]:
+            nonlocal js_status, js_error
+            assert js_browser is not None
+            try:
+                return js_browser.discover(response)
+            except BrowserDiscoveryUnavailable as exc:
+                js_status = "partial"
+                js_error = str(exc)
+                return []
+
+        try:
+            page_responses, skipped, js_count = crawl_pages(
+                session, url, first, max_pages=max_pages, timeout=timeout,
+                allow_private=allow_private, pacer=pacer, control=control,
+                discover_links=discover_rendered if js_browser else None,
+            )
+            if js_browser and js_browser.partial:
+                js_status = "partial"
+                js_error = js_error or "Một số tệp JavaScript không tải được trong giới hạn quét."
+        finally:
+            if js_browser:
+                js_browser.close()
         if packages is not None:
             site_results.append(check_lockfile(
                 lockfile[0], packages, use_osv=use_osv, control=control,
@@ -321,6 +392,15 @@ def scan(
                 final_url=response.url,
                 status_code=response.status_code,
                 results=page_results,
+                observations=[
+                    capture(response, purpose="page"),
+                    *(
+                        [capture(
+                            probe_response, purpose="cors_probe",
+                            request_headers={"Origin": AUDIT_ORIGIN},
+                        )] if index == 0 and probe_response is not None else []
+                    ),
+                ],
             ))
         api_routes: list[dict] = []
         api_discovered = 0
@@ -426,6 +506,10 @@ def scan(
                                 api_cors_browser_skipped_paths.append(target.path)
                         continue
                     expected_auth = target.expect_auth or target.path in auth_paths
+                    endpoint_observations = [capture(
+                        response, purpose="api_anonymous",
+                        request_headers={"Accept": "application/json"},
+                    )]
                     api_session.cookies.clear()
                     try:
                         probe = fetch(
@@ -438,6 +522,12 @@ def scan(
                                 "Accept": "application/json", "Origin": AUDIT_ORIGIN,
                             },
                         )
+                        endpoint_observations.append(capture(
+                            probe, purpose="api_cors_probe",
+                            request_headers={
+                                "Accept": "application/json", "Origin": AUDIT_ORIGIN,
+                            },
+                        ))
                         cors_result = check_cors(response, probe)
                     except DNSChanged:
                         raise
@@ -476,6 +566,10 @@ def scan(
                             request_headers=preflight_headers,
                         )
                         preflight_status = preflight.status_code
+                        endpoint_observations.append(capture(
+                            preflight, purpose="api_preflight", method="OPTIONS",
+                            request_headers=preflight_headers,
+                        ))
                         endpoint_results.append(check_cors_preflight(
                             preflight, requested_header=requested_header,
                         ))
@@ -505,6 +599,10 @@ def scan(
                                 request_headers=api_credential.headers(),
                             )
                             authenticated_status = authenticated.status_code
+                            endpoint_observations.append(capture(
+                                authenticated, purpose="api_authenticated",
+                                credential_mode=api_credential.mode,
+                            ))
                             endpoint_results.append(check_api_auth_comparison(
                                 response.status_code, authenticated_status, target,
                             ))
@@ -523,6 +621,10 @@ def scan(
                                         request_headers=api_second_credential.headers(),
                                     )
                                     second_status = second_response.status_code
+                                    endpoint_observations.append(capture(
+                                        second_response, purpose="api_second_account",
+                                        credential_mode=api_second_credential.mode,
+                                    ))
                                     comparison, compared_pointers = check_api_cross_account(
                                         authenticated, second_response, target,
                                         compare_fields[target.path],
@@ -566,6 +668,11 @@ def scan(
                                 },
                             )
                             credentialed_cors_status = credentialed_probe.status_code
+                            endpoint_observations.append(capture(
+                                credentialed_probe, purpose="api_credentialed_cors",
+                                credential_mode=api_credential.mode,
+                                request_headers={"Origin": AUDIT_ORIGIN},
+                            ))
                             endpoint_results.append(check_cors_credentialed(
                                 credentialed_probe, mode=api_credential.mode,
                                 preflight=preflight,
@@ -610,6 +717,7 @@ def scan(
                         api_cors_browser_outcome=browser_outcome,
                         api_compared_pointers=compared_pointers,
                         results=endpoint_results,
+                        observations=endpoint_observations,
                     ))
             finally:
                 if browser_verifier:
@@ -646,6 +754,11 @@ def scan(
             api_cors_browser_enabled=browser_cors,
             api_cors_browser_requested=api_auth_requested if browser_cors else 0,
             api_cors_browser_skipped_paths=api_cors_browser_skipped_paths,
+            js_discovery_enabled=js_discovery,
+            js_discovery_status=js_status,
+            js_discovered_urls=js_count,
+            js_discovery_error=js_error,
+            observations=site_observations,
         )
     finally:
         session.close()

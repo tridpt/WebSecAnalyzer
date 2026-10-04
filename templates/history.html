@@ -13,7 +13,7 @@
 </form>
 {% endif %}
 <div class="panel history-wrap"><table class="history-table"><thead><tr><th>Lần quét</th><th>Website</th><th>Điểm</th><th>Thời gian (UTC)</th><th>Báo cáo</th></tr></thead><tbody>
-{% for e in entries %}<tr><td>#{{ e.id }}</td><td class="url-cell">{{ e.final_url }}</td><td><span class="score-pill {{ score_class(e.overall_score) }}">{{ e.overall_score }}</span></td><td>{{ e.created_at[:19].replace('T', ' ') }}</td><td><div class="history-links"><a href="{{ url_for('view_scan', scan_id=e.id) }}">Xem</a><a href="{{ url_for('export_json', scan_id=e.id) }}">JSON</a><a href="{{ url_for('export_scan', scan_id=e.id) }}">HTML</a></div></td></tr>{% endfor %}
+{% for e in entries %}<tr><td>#{{ e.id }}</td><td class="url-cell">{{ e.final_url }}</td><td><span class="score-pill {{ score_class(e.overall_score) }}">{{ e.overall_score }}</span></td><td>{{ e.created_at[:19].replace('T', ' ') }}</td><td><div class="history-links"><a href="{{ url_for('view_scan', scan_id=e.id) }}">Xem</a><a href="{{ url_for('export_json', scan_id=e.id) }}">JSON</a><a href="{{ url_for('export_evidence', scan_id=e.id) }}">Bằng chứng</a><a href="{{ url_for('export_scan', scan_id=e.id) }}">HTML</a></div></td></tr>{% endfor %}
 </tbody></table></div>
 {% else %}
 <div class="panel empty-state"><h2>Chưa có báo cáo nào</h2><p>Hãy kiểm tra website đầu tiên để tạo lịch sử.</p><a class="text-btn" href="{{ url_for('index') }}">Bắt đầu kiểm tra →</a></div>

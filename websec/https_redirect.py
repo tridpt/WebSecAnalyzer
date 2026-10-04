@@ -10,6 +10,7 @@ from .fetch import RequestPacer
 from .findings import CheckResult, Severity
 from .targets import InvalidTarget, normalize_target
 from .control import ScanControl
+from .evidence import snapshot_response
 
 
 def check_https_redirect(
@@ -20,6 +21,8 @@ def check_https_redirect(
     allow_private: bool,
     pacer: RequestPacer,
     control: ScanControl | None = None,
+    observations: list[dict] | None = None,
+    redact_values: list[str] | None = None,
 ) -> CheckResult:
     result = CheckResult(category="HTTP to HTTPS Redirect")
     parsed = urlsplit(final_url)
@@ -59,6 +62,10 @@ def check_https_redirect(
         return result
 
     try:
+        if observations is not None:
+            observations.append(snapshot_response(
+                response, purpose="http_redirect", redact_values=redact_values,
+            ))
         location = response.headers.get("Location")
         if response.is_redirect and location:
             destination = urljoin(http_url, location)

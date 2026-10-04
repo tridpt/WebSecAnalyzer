@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from urllib.parse import urldefrag, urljoin, urlsplit
 
 import requests
@@ -116,6 +117,9 @@ def fetch(
                 stream=True,
                 headers=request_headers,
             )
+            response.websec_observed_at = datetime.now(timezone.utc).isoformat(
+                timespec="seconds"
+            ).replace("+00:00", "Z")
         except requests.RequestException:
             if control:
                 control.check()

@@ -31,6 +31,7 @@ from websec.compare import new_high_issues
 from websec.scope import missing_baseline_scope
 from websec.waivers import active_waiver_for, load_waivers
 from websec.api import parse_api_credential
+from websec.evidence import evidence_bundle
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,6 +62,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--max-seconds", type=int, default=120,
         help="Maximum total scan time in seconds (1-600; default 120)",
+    )
+    parser.add_argument(
+        "--js-discovery", action="store_true",
+        help="Optionally render checked pages to discover same-origin SPA links",
+    )
+    parser.add_argument(
+        "--evidence-file", type=Path, metavar="EVIDENCE.json",
+        help="Write a separate redacted JSON evidence bundle",
     )
     parser.add_argument(
         "--lockfile", type=Path,
@@ -183,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
             api_compare_fields=args.api_compare_field,
             browser_cors=args.browser_cors,
             browser_cookie_attributes=args.browser_cookie_attributes,
+            js_discovery=args.js_discovery,
         )
     except (InvalidTarget, ScanStopped) as exc:
         print(f"Invalid target: {exc}", file=sys.stderr)
@@ -200,6 +210,16 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+
+    if args.evidence_file:
+        try:
+            args.evidence_file.write_text(
+                json.dumps(evidence_bundle(report), ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"Cannot write evidence file: {exc}", file=sys.stderr)
+            return 2
 
     missing_scope = []
     new_high = []

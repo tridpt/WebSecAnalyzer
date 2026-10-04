@@ -34,6 +34,7 @@ from websec.browser_cors import validate_browser_options
 from websec.compare import compare_reports
 from websec.control import ScanControl, ScanStopped
 from websec.crawler import MAX_PAGES
+from websec.evidence import evidence_bundle
 from websec.lockfiles import MAX_LOCK_BYTES, parse_lockfile
 from websec.report import render_json
 from websec.scanner import scan
@@ -162,6 +163,7 @@ def index():
                     request.form.get("api_auth_secret"),
                 )
                 browser_cors = request.form.get("browser_cors") == "on"
+                js_discovery = request.form.get("js_discovery") == "on"
                 browser_cookie_attributes = (
                     request.form.get("browser_cookie_attributes") or ""
                 ).strip() or None
@@ -216,6 +218,7 @@ def index():
                     "api_compare_fields": api_compare_fields,
                     "browser_cors": browser_cors,
                     "browser_cookie_attributes": browser_cookie_attributes,
+                    "js_discovery": js_discovery,
                 }
                 threading.Thread(target=_run_job, args=(job, options), daemon=True).start()
                 return redirect(url_for("view_job", job_id=job_id))
@@ -343,6 +346,21 @@ def export_json(scan_id: int):
     return Response(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", mimetype="application/json",
         headers={"Content-Disposition": f"attachment; filename=websec-report-{scan_id}.json"},
+    )
+
+
+@app.route("/scan/<int:scan_id>/evidence.json")
+def export_evidence(scan_id: int):
+    report = storage.get_report(scan_id)
+    if report is None:
+        abort(404)
+    return Response(
+        json.dumps(evidence_bundle(report), ensure_ascii=False, indent=2) + "\n",
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f"attachment; filename=websec-evidence-{scan_id}.json",
+            "Cache-Control": "no-store",
+        },
     )
 
 

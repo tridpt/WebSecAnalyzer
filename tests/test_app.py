@@ -106,6 +106,7 @@ def test_scan_report_and_export_render(monkeypatch):
             "api_second_auth_mode": "cookie",
             "api_second_auth_secret": "session=SECOND_WEB_SECRET_DO_NOT_SAVE",
             "api_compare_fields": "/api/account /user/id",
+            "js_discovery": "on",
         },
     )
     assert response.status_code == 302
@@ -128,6 +129,7 @@ def test_scan_report_and_export_render(monkeypatch):
         "session=SECOND_WEB_SECRET_DO_NOT_SAVE"
     )
     assert options_seen[0]["api_compare_fields"] == ["/api/account /user/id"]
+    assert options_seen[0]["js_discovery"] is True
     with client.session_transaction() as user_session:
         assert "WEB_FORM_SECRET_DO_NOT_SAVE" not in str(dict(user_session))
         assert "SECOND_WEB_SECRET_DO_NOT_SAVE" not in str(dict(user_session))

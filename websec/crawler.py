@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from html.parser import HTMLParser
+from typing import Callable
 from urllib.parse import parse_qsl, urljoin, urlsplit
 from xml.etree import ElementTree
 
@@ -71,10 +72,20 @@ class _Links(HTMLParser):
 def extract_links(html: str, base_url: str, site_origin: tuple[str, str, int]) -> list[str]:
     parser = _Links()
     parser.feed(html)
+    return filter_links(parser.hrefs, base_url, site_origin)
+
+
+def filter_links(
+    hrefs: list[str], base_url: str, site_origin: tuple[str, str, int],
+) -> list[str]:
+    """Apply the same scope and safety rules to HTML and rendered anchors."""
     found: list[str] = []
     seen: set[str] = set()
-    for href in parser.hrefs:
-        candidate = without_fragment(urljoin(base_url, href.strip()))
+    for href in hrefs:
+        try:
+            candidate = without_fragment(urljoin(base_url, href.strip()))
+        except ValueError:
+            continue
         if candidate not in seen and _eligible(candidate, site_origin):
             seen.add(candidate)
             found.append(candidate)
@@ -158,32 +169,47 @@ def crawl_pages(
     allow_private: bool,
     pacer: RequestPacer,
     control: ScanControl | None = None,
-) -> tuple[list[tuple[str, requests.Response]], int]:
+    discover_links: Callable[[requests.Response], list[str]] | None = None,
+) -> tuple[list[tuple[str, requests.Response]], int, int]:
     """Return HTML pages and number of discovered URLs skipped or not scanned."""
     site_origin = origin(start_response.url)
     start_loopback = is_loopback_host(urlsplit(start_response.url).hostname)
     if not is_html(start_response):
-        return [], 1
+        return [], 1, 0
     pages = [(start_url, start_response)]
-    if max_pages == 1:
-        return pages, 0
+    if max_pages == 1 and discover_links is None:
+        return pages, 0, 0
     queue: deque[str] = deque()
     seen = {without_fragment(start_response.url), without_fragment(start_url)}
     max_candidates = max_pages * 4
 
-    def enqueue(urls: list[str]) -> None:
+    def enqueue(urls: list[str]) -> int:
+        added = 0
         for candidate in urls:
             if len(seen) >= max_candidates or candidate in seen:
                 continue
             seen.add(candidate)
             queue.append(candidate)
+            added += 1
+        return added
+
+    js_discovered = 0
+
+    def enqueue_rendered(response: requests.Response) -> None:
+        nonlocal js_discovered
+        if discover_links is not None:
+            js_discovered += enqueue(filter_links(
+                discover_links(response), response.url, site_origin,
+            ))
 
     enqueue(extract_links(start_response.text, start_response.url, site_origin))
-    enqueue(sitemap_urls(
-        session, start_response.url, timeout=timeout, allow_private=allow_private,
-        pacer=pacer, max_urls=max_candidates,
-        control=control,
-    ))
+    enqueue_rendered(start_response)
+    if max_pages > 1:
+        enqueue(sitemap_urls(
+            session, start_response.url, timeout=timeout, allow_private=allow_private,
+            pacer=pacer, max_urls=max_candidates,
+            control=control,
+        ))
 
     attempts = 0
     skipped = 0
@@ -215,5 +241,6 @@ def crawl_pages(
             continue
         pages.append((candidate, response))
         enqueue(extract_links(response.text, response.url, site_origin))
+        enqueue_rendered(response)
 
-    return pages, skipped + len(queue)
+    return pages, skipped + len(queue), js_discovered

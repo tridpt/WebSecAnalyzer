@@ -47,6 +47,13 @@ def render_text(report: ScanReport, use_color: bool = True) -> str:
             f"  Pages checked: {len(report.pages)}/{report.max_pages}; "
             f"other discovered URLs not checked: {report.skipped_urls}"
         )
+    if report.js_discovery_enabled:
+        lines.append(
+            f"  JavaScript link discovery: {report.js_discovery_status}; "
+            f"{report.js_discovered_urls} new URL(s) found."
+        )
+        if report.js_discovery_error:
+            lines.append(f"  JavaScript discovery note: {report.js_discovery_error}")
     lines.append(
         f"  Checked scope: {len(report.pages)} HTML page(s), "
         f"{len(report.api_endpoints)}/{report.api_requested} selected API endpoint(s); "
@@ -190,6 +197,7 @@ def to_dict(report: ScanReport) -> dict:
         "api_cors_credentialed_status_code": report.api_cors_credentialed_status_code,
         "api_cors_browser_outcome": report.api_cors_browser_outcome,
         "api_compared_pointers": report.api_compared_pointers,
+        "observations": report.observations,
         "overall_score": report.overall_score,
         "max_pages": report.max_pages,
         "skipped_urls": report.skipped_urls,
@@ -204,6 +212,10 @@ def to_dict(report: ScanReport) -> dict:
             "html_pages_checked": len(report.pages),
             "html_page_limit": report.max_pages,
             "html_urls_not_checked": report.skipped_urls,
+            "js_discovery_enabled": report.js_discovery_enabled,
+            "js_discovery_status": report.js_discovery_status,
+            "js_discovered_urls": report.js_discovered_urls,
+            "js_discovery_error": report.js_discovery_error,
             "api_routes_discovered": report.api_discovered,
             "api_endpoints_requested": report.api_requested,
             "api_selected_paths": report.api_selected_paths,
