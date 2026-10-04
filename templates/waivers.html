@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Ngoại lệ · WebSecAnalyzer{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="eyebrow">Có thời hạn</span><h1>Ngoại lệ phát hiện</h1><p class="lead">Ngoại lệ gắn với đúng website, URL và phát hiện. Ngày hết hạn tính theo UTC; điểm và phát hiện gốc vẫn được giữ trong báo cáo.</p><div class="result-actions"><a class="text-btn" href="{{ url_for('export_waivers') }}">Tải JSON cho CI ↓</a></div></div>
+{% if waivers %}<div class="waiver-list">
+{% for item in waivers %}
+<section class="panel waiver-item">
+  <strong>{{ item.title }}</strong> <span class="verification {{ 'observed' if item.active else 'inconclusive' }}">{{ 'Còn hiệu lực' if item.active else 'Đã hết hạn' }}</span>
+  <p>{{ item.target_url }} · {{ item.surface }} · {{ item.url }}</p>
+  <p><strong>Lý do:</strong> {{ item.reason }}</p>
+  <p><strong>Hết hạn:</strong> {{ item.expires_on }} (UTC)</p>
+  <form method="post" action="{{ url_for('remove_waiver', fingerprint=item.fingerprint) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="text-btn" type="submit">Thu hồi ngoại lệ</button></form>
+</section>
+{% endfor %}</div>
+{% else %}<div class="panel empty-state"><h2>Chưa có ngoại lệ</h2><p>Mở một báo cáo đã lưu và chọn phát hiện để ghi lý do cùng ngày hết hạn.</p><a class="text-btn" href="{{ url_for('history') }}">Xem báo cáo →</a></div>{% endif %}
+{% endblock %}

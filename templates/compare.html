@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}So sánh #{{ old_id }} và #{{ new_id }} · WebSecAnalyzer{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="eyebrow">So sánh hai lần quét</span><h1>#{{ old_id }} → #{{ new_id }}</h1><p class="lead">{{ comparison.new_url }}</p><div class="result-actions"><a class="text-btn" href="{{ url_for('view_scan', scan_id=old_id) }}">Báo cáo cũ</a><a class="text-btn" href="{{ url_for('view_scan', scan_id=new_id) }}">Báo cáo mới</a></div></div>
+<section class="panel compare-summary"><strong>Điểm {{ comparison.old_score }} → {{ comparison.new_score }}</strong><span>{{ comparison.new_issues|length }} lỗi mới · {{ comparison.fixed_issues|length }} lỗi đã sửa · {{ comparison.unchanged_count }} lỗi còn tồn tại</span></section>
+{% if comparison.scope_changed %}<p class="report-note">Phạm vi đã thay đổi: HTML {{ comparison.old_html_count }} → {{ comparison.new_html_count }} trang, API {{ comparison.old_api_count }} → {{ comparison.new_api_count }} endpoint. Chỉ gọi một lỗi là đã sửa khi URL đó được kiểm tra lại. {{ comparison.not_rechecked_count }} lỗi cũ chưa được kiểm tra lại.</p>{% endif %}
+{% for heading, items, kind in [('Lỗi mới', comparison.new_issues, 'new'), ('Lỗi đã sửa', comparison.fixed_issues, 'fixed')] %}
+<div class="section-heading"><h2>{{ heading }}</h2><span>{{ items|length }} phát hiện</span></div>
+<div class="category-list">
+  {% for item in items %}
+  <section class="panel finding compare-finding"><div class="finding-top"><span class="severity {{ item.severity.lower() }}">{{ item.severity }}</span><span class="verification {{ item.verification }}">{{ {'observed': 'Có bằng chứng', 'suspected': 'Nghi ngờ', 'inconclusive': 'Không kết luận được'}[item.verification] }}</span><strong class="finding-title">{{ item.title }}</strong></div><p class="finding-detail">{{ item.url }} · {{ item.category }}</p><p class="finding-detail">{{ item.detail }}</p>{% if item.evidence %}<p class="finding-evidence"><strong>Bằng chứng:</strong> <code>{{ item.evidence }}</code></p>{% endif %}{% if kind == 'new' and item.recommendation %}<p class="finding-fix"><strong>Cách xử lý:</strong> {{ item.recommendation }}</p>{% endif %}</section>
+  {% else %}<p class="report-note">Không có {{ heading|lower }}.</p>{% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,19 @@
+# Scan history database
+*.db
+
+# Local configuration and private keys
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Editor
+.vscode/
+.idea/

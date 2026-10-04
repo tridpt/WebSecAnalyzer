@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <span class="eyebrow">Website Security Check</span>
+    <h1>Hiểu rõ mức độ <em>an toàn</em> của website.</h1>
+    <p class="lead">Quét tối đa 30 trang trong website của bạn để kiểm tra HTTPS, HTTP headers, cookie và thư viện JavaScript. Xem lỗi theo từng URL cùng gợi ý xử lý.</p>
+  </div>
+  <div class="hero-visual" aria-hidden="true">
+    <div class="hero-shield"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2.6 20 6v5.4c0 5-3.2 8.6-8 10-4.8-1.4-8-5-8-10V6l8-3.4Z" stroke="currentColor" stroke-width="1.1"/><path d="m8.5 12 2.4 2.4 4.8-5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="float-pill one">✓ HTTPS &amp; TLS</span>
+    <span class="float-pill two">✓ Security headers</span>
+  </div>
+</section>
+
+<section class="panel scan-panel" aria-labelledby="scan-title">
+  <div class="panel-header">
+    <div><h2 id="scan-title">Bắt đầu kiểm tra</h2><p>Nhập URL của website bạn sở hữu hoặc được phép kiểm tra.</p></div>
+    <span class="panel-kicker">Quét thụ động · không khai thác</span>
+  </div>
+  <form method="post" enctype="multipart/form-data" id="scan-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="input-row">
+      <input class="url-field" type="text" inputmode="url" name="url" aria-label="Địa chỉ website" placeholder="https://ten-mien-cua-ban.vn hoặc localhost:3000" value="{{ request.form.get('url', '') }}" required autofocus>
+      <button class="primary-btn" type="submit" id="scan-button"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m16 16 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Kiểm tra ngay</span></button>
+    </div>
+    <div class="checks">
+      <label class="check-label"><input type="checkbox" name="owns" required {{ 'checked' if request.form.get('owns') else '' }}> Tôi có quyền kiểm tra website này</label>
+      <label class="check-label"><input type="checkbox" name="no_osv" {{ 'checked' if request.form.get('no_osv') else '' }}> Bỏ tra cứu lỗ hổng thư viện qua OSV.dev</label>
+      <label class="check-label">Giới hạn trang <input class="page-limit" type="number" name="max_pages" min="1" max="30" value="{{ request.form.get('max_pages', '20') }}" aria-label="Số trang tối đa"></label>
+      <label class="check-label">Thời gian tối đa <input class="page-limit" type="number" name="max_seconds" min="1" max="600" value="{{ request.form.get('max_seconds', '120') }}" aria-label="Thời gian quét tối đa tính bằng giây"> giây</label>
+      <label class="check-label">Lockfile (tùy chọn) <input type="file" name="lockfile" accept=".json,.yaml" aria-label="package-lock.json hoặc pnpm-lock.yaml"></label>
+    </div>
+    <details class="api-options">
+      <summary>Quét API tùy chọn</summary>
+      <div class="api-option-grid">
+        <label>Path OpenAPI để liệt kê route
+          <input type="text" name="openapi_path" placeholder="/openapi.json" value="{{ request.form.get('openapi_path', '') }}" aria-label="Path OpenAPI cùng website">
+        </label>
+        <label>Endpoint GET cần kiểm tra (tối đa 10, mỗi dòng một path)
+          <textarea name="api_paths" rows="4" placeholder="/api/health&#10;private /api/account" aria-label="Danh sách API endpoint">{{ request.form.get('api_paths', '') }}</textarea>
+        </label>
+      </div>
+      <button type="button" class="text-btn openapi-preview-button" id="openapi-preview-button">Đọc GET route từ OpenAPI</button>
+      <p id="openapi-preview-status" class="openapi-preview-status" role="status" aria-live="polite"></p>
+      <div id="openapi-route-picker" class="openapi-route-picker" hidden>
+        <div id="openapi-route-list" class="openapi-route-list"></div>
+        <button type="button" class="text-btn" id="add-openapi-routes">Thêm GET đã chọn vào danh sách quét</button>
+      </div>
+      <div class="api-option-grid auth-options">
+        <label>Phiên tài khoản A (tùy chọn)
+          <select name="api_auth_mode" aria-label="Loại phiên tài khoản thử nghiệm">
+            <option value="none">Không dùng</option>
+            <option value="cookie" {{ 'selected' if request.form.get('api_auth_mode') == 'cookie' else '' }}>Giá trị Cookie</option>
+            <option value="bearer" {{ 'selected' if request.form.get('api_auth_mode') == 'bearer' else '' }}>Bearer token</option>
+          </select>
+        </label>
+        <label>Giá trị phiên A tạm thời
+          <input type="password" name="api_auth_secret" maxlength="4096" autocomplete="off" placeholder="session=... hoặc chỉ token Bearer" aria-label="Giá trị phiên thử nghiệm">
+        </label>
+      </div>
+      <label class="check-label"><input type="checkbox" name="browser_cors" {{ 'checked' if request.form.get('browser_cors') == 'on' else '' }}> Xác minh CORS bằng trình duyệt cô lập trên API riêng tư đã chọn</label>
+      <label>Thuộc tính Cookie thật khi dùng phép thử trình duyệt (không nhập giá trị Cookie)
+        <input type="text" name="browser_cookie_attributes" maxlength="500" value="{{ request.form.get('browser_cookie_attributes', '') }}" placeholder="SameSite=None; Secure; Path=/" aria-label="Thuộc tính SameSite Secure và Path của Cookie">
+      </label>
+      <p>Phép thử trình duyệt chỉ chạy khi bật tùy chọn và có phiên A. Với Cookie, nhập thuộc tính thực tế của một Cookie <code>name=value</code>; hỗ trợ <code>SameSite</code>, <code>Secure</code>, <code>HttpOnly</code> và <code>Path</code>. Trình duyệt dùng cầu nối tạm thời trên máy này để kiểm tra việc gửi Cookie và JavaScript đọc mã HTTP; không lưu body hay giá trị phiên.</p>
+      <div class="api-option-grid auth-options">
+        <label>Phiên tài khoản B để so sánh (tùy chọn)
+          <select name="api_second_auth_mode" aria-label="Loại phiên tài khoản B">
+            <option value="none">Không dùng</option>
+            <option value="cookie" {{ 'selected' if request.form.get('api_second_auth_mode') == 'cookie' else '' }}>Giá trị Cookie</option>
+            <option value="bearer" {{ 'selected' if request.form.get('api_second_auth_mode') == 'bearer' else '' }}>Bearer token</option>
+          </select>
+        </label>
+        <label>Giá trị phiên B tạm thời
+          <input type="password" name="api_second_auth_secret" maxlength="4096" autocomplete="off" placeholder="Phiên của tài khoản khác" aria-label="Giá trị phiên tài khoản B">
+        </label>
+      </div>
+      <label>Trường JSON phải khác giữa A và B (tối đa 20, mỗi dòng: path API và JSON Pointer)
+        <textarea name="api_compare_fields" rows="3" placeholder="/api/account /user/id" aria-label="Trường JSON so sánh giữa hai tài khoản">{{ request.form.get('api_compare_fields', '') }}</textarea>
+      </label>
+      <p>OpenAPI chỉ được đọc để chọn route; công cụ không tự gọi route được phát hiện. Với path có <code>{id}</code>, nhập một giá trị cụ thể trước khi quét. Chỉ các GET trong danh sách endpoint mới được kiểm tra. Yêu cầu ẩn danh không mang cookie; mỗi endpoint còn nhận một OPTIONS preflight không mang phiên. Thêm <code>private </code> trước path nếu endpoint phải yêu cầu đăng nhập. Phiên A chỉ gửi tới path private hoặc GET mà OpenAPI khai báo cần xác thực, gồm một GET so sánh và một GET thử CORS với Origin lạ. Để so sánh hai tài khoản, chọn hai phiên khác nhau và trường JSON dự kiến riêng trên path <code>private</code>. Công cụ so sánh giá trị trong bộ nhớ, không lưu token hay nội dung phản hồi, không theo chuyển hướng. Hãy dùng tài khoản quyền thấp; nhập Cookie (ví dụ <code>session=...</code>) hoặc Bearer token, không nhập mật khẩu tài khoản.</p>
+    </details>
+  </form>
+  <p class="scan-scope">Có thể nhập localhost:3000 hoặc URL công khai. Lockfile được đọc cục bộ để tra OSV theo phiên bản chính xác; chỉ tên gói và phiên bản gửi tới OSV. Quét tối đa 30 trang cùng website; kết quả lưu trên máy này.</p>
+  {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+</section>
+
+<div class="feature-grid" aria-label="Các nhóm kiểm tra">
+  <div class="feature"><div class="feature-icon">01</div><strong>HTTPS &amp; TLS</strong><span>Chứng chỉ, chuyển hướng và TLS cũ.</span></div>
+  <div class="feature"><div class="feature-icon">02</div><strong>CSP &amp; CORS</strong><span>Bằng chứng header và hướng dẫn sửa.</span></div>
+  <div class="feature"><div class="feature-icon">03</div><strong>Cookie</strong><span>Secure, HttpOnly, SameSite và tiền tố.</span></div>
+  <div class="feature"><div class="feature-icon">04</div><strong>Thư viện JS</strong><span>Phiên bản từ lockfile và cảnh báo OSV.</span></div>
+</div>
+
+{% if report %}
+<div id="report" class="result-heading">
+  <div><span class="eyebrow">Kết quả kiểm tra</span><h2>Báo cáo cho website của bạn</h2></div>
+  {% if saved_id %}<div class="result-actions"><a class="text-btn" href="{{ url_for('view_scan', scan_id=saved_id) }}">Xem trong lịch sử</a><a class="text-btn" href="{{ url_for('export_scan', scan_id=saved_id) }}">Tải báo cáo HTML ↓</a></div>{% endif %}
+</div>
+{% include "_report.html" %}
+{% endif %}
+<script>
+  const scanForm = document.getElementById('scan-form');
+  const urlInput = scanForm.elements['url'];
+  const openapiInput = scanForm.elements['openapi_path'];
+  const apiPathsInput = scanForm.elements['api_paths'];
+  const previewButton = document.getElementById('openapi-preview-button');
+  const previewStatus = document.getElementById('openapi-preview-status');
+  const routePicker = document.getElementById('openapi-route-picker');
+  const routeList = document.getElementById('openapi-route-list');
+  const addRoutesButton = document.getElementById('add-openapi-routes');
+  let previewSource = null;
+  let routeChoices = [];
+
+  function clearPreview() {
+    previewSource = null;
+    routeChoices = [];
+    routeList.replaceChildren();
+    routePicker.hidden = true;
+    previewStatus.textContent = '';
+  }
+  urlInput.addEventListener('input', clearPreview);
+  openapiInput.addEventListener('input', clearPreview);
+
+  function selectedPath(choice) {
+    let path = choice.route.path;
+    for (const [name, input] of choice.parameters) {
+      const value = input.value.trim();
+      if (!/^[A-Za-z0-9._~-]{1,100}$/.test(value) || value === '.' || value === '..') {
+        throw new Error(`Nhập giá trị path hợp lệ cho {${name}} ở ${choice.route.path}.`);
+      }
+      path = path.replaceAll(`{${name}}`, value);
+    }
+    return path;
+  }
+
+  function addSelectedRoutes() {
+    if (previewSource !== `${urlInput.value.trim()}|${openapiInput.value.trim()}`) {
+      if (routeChoices.some(choice => choice.checkbox.checked)) {
+        throw new Error('URL hoặc path OpenAPI đã đổi. Hãy đọc lại danh sách GET route.');
+      }
+      return 0;
+    }
+    const lines = apiPathsInput.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    let added = 0;
+    for (const choice of routeChoices) {
+      if (!choice.checkbox.checked) continue;
+      const path = selectedPath(choice);
+      const prefixed = choice.route.auth_declared ? `private ${path}` : path;
+      const samePath = lines.some(line => line.replace(/^private\s+/i, '') === path);
+      const alreadyPrivate = lines.some(line => line.toLowerCase() === `private ${path}`.toLowerCase());
+      if (!samePath || (choice.route.auth_declared && !alreadyPrivate)) {
+        lines.push(prefixed);
+        added += 1;
+      }
+    }
+    const uniquePaths = new Set(lines.map(line => line.replace(/^private\s+/i, '')));
+    if (uniquePaths.size > 10) {
+      throw new Error('Chỉ chọn tối đa 10 endpoint GET cho một lượt quét.');
+    }
+    apiPathsInput.value = lines.join('\n');
+    return added;
+  }
+
+  previewButton.addEventListener('click', async () => {
+    if (!urlInput.value.trim() || !openapiInput.value.trim()) {
+      previewStatus.textContent = 'Nhập URL website và path OpenAPI trước.';
+      return;
+    }
+    if (!scanForm.elements['owns'].checked) {
+      previewStatus.textContent = 'Xác nhận quyền kiểm tra website trước.';
+      return;
+    }
+    clearPreview();
+    previewButton.disabled = true;
+    previewStatus.textContent = 'Đang đọc OpenAPI…';
+    const requestedUrl = urlInput.value.trim();
+    const requestedPath = openapiInput.value.trim();
+    const body = new FormData();
+    body.append('csrf_token', scanForm.elements['csrf_token'].value);
+    body.append('owns', 'on');
+    body.append('url', requestedUrl);
+    body.append('openapi_path', requestedPath);
+    try {
+      const response = await fetch('{{ url_for('preview_api_routes') }}', {
+        method: 'POST', body, credentials: 'same-origin',
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Không đọc được OpenAPI.');
+      if (requestedUrl !== urlInput.value.trim() || requestedPath !== openapiInput.value.trim()) {
+        throw new Error('URL hoặc path OpenAPI đã đổi. Hãy đọc lại danh sách GET route.');
+      }
+      previewSource = `${requestedUrl}|${requestedPath}`;
+      for (const route of payload.routes) {
+        const item = document.createElement('div');
+        item.className = 'openapi-route-option';
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        const code = document.createElement('code');
+        code.textContent = `GET ${route.path}`;
+        label.append(checkbox, code);
+        if (route.auth_declared) {
+          const badge = document.createElement('span');
+          badge.textContent = 'cần đăng nhập';
+          label.append(badge);
+        }
+        item.append(label);
+        const parameters = new Map();
+        for (const name of route.parameters) {
+          if (parameters.has(name)) continue;
+          const field = document.createElement('label');
+          field.className = 'openapi-parameter';
+          field.textContent = `Giá trị {${name}}`;
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.maxLength = 100;
+          input.placeholder = name === 'id' ? '42' : name;
+          field.append(input);
+          item.append(field);
+          parameters.set(name, input);
+        }
+        routeList.append(item);
+        routeChoices.push({route, checkbox, parameters});
+      }
+      routePicker.hidden = routeChoices.length === 0;
+      previewStatus.textContent = `Có ${payload.eligible_get}/${payload.total_get} GET route có path hợp lệ; hiển thị ${routeChoices.length}. Chọn tối đa 10 endpoint.`;
+    } catch (error) {
+      previewStatus.textContent = error.message || 'Không đọc được OpenAPI.';
+    } finally {
+      previewButton.disabled = false;
+    }
+  });
+
+  addRoutesButton.addEventListener('click', () => {
+    try {
+      const added = addSelectedRoutes();
+      previewStatus.textContent = `Đã thêm ${added} endpoint; danh sách quét hiện có ${apiPathsInput.value.split(/\r?\n/).filter(Boolean).length} dòng.`;
+    } catch (error) {
+      previewStatus.textContent = error.message;
+    }
+  });
+
+  scanForm.addEventListener('submit', (event) => {
+    try {
+      addSelectedRoutes();
+    } catch (error) {
+      event.preventDefault();
+      previewStatus.textContent = error.message;
+      return;
+    }
+    if (scanForm.checkValidity()) {
+      const button = document.getElementById('scan-button');
+      button.disabled = true;
+      button.querySelector('span').textContent = 'Đang kiểm tra…';
+    }
+  });
+</script>
+{% endblock %}

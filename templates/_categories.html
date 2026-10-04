@@ -1,0 +1,33 @@
+<div class="category-list">
+  {% for cat in categories %}
+  <section class="panel category-card" aria-labelledby="category-{{ section_id }}-{{ loop.index }}">
+    <div class="category-top"><span class="category-number">{{ '%02d'|format(loop.index) }}</span><h3 id="category-{{ section_id }}-{{ loop.index }}">{{ category_names.get(cat.category, cat.category) }}</h3><span class="category-score">{% if cat.error %}Chưa kiểm tra{% else %}<strong>{{ cat.score }}</strong> / 100{% endif %}</span></div>
+    {% if cat.error %}
+      <p class="empty-note"><span class="verification inconclusive">Không kết luận được</span> {{ cat.error }}</p>
+    {% elif cat.findings %}
+      {% for f in cat.findings|sort(attribute='severity', reverse=true) %}
+      {% set key = finding_key(report.url, surface, location, cat.category, f.check, f.title) %}
+      {% set waiver = waivers_by_id.get(key) %}
+      <div class="finding">
+        <div class="finding-top"><span class="severity {{ f.severity.name.lower() }}">{{ severity_names[f.severity.name] }}</span><span class="verification {{ f.verification.value }}">{{ f.verification.label }}</span><span class="finding-title">{{ f.title }}</span></div>
+        <p class="finding-detail">{{ f.detail }}</p>
+        {% if f.evidence %}<p class="finding-evidence"><strong>Bằng chứng:</strong> <code>{{ f.evidence }}</code></p>{% endif %}
+        {% if f.recommendation %}<p class="finding-fix"><strong>Cách xử lý:</strong> {{ f.recommendation }}</p>{% endif %}
+        {% if waiver %}<p class="waiver-note"><strong>{{ 'Ngoại lệ còn hiệu lực' if waiver.active else 'Ngoại lệ đã hết hạn' }}:</strong> {{ waiver.reason }} · hết hạn {{ waiver.expires_on }} (UTC)</p>{% endif %}
+        {% if can_manage_waivers and f.severity.name != 'INFO' %}
+        <details class="waiver-editor"><summary>{{ 'Gia hạn / sửa ngoại lệ' if waiver else 'Ghi ngoại lệ có thời hạn' }}</summary>
+          <form method="post" action="{{ url_for('save_scan_waiver', scan_id=scan_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="fingerprint" value="{{ key }}">
+            <label>Lý do <textarea name="reason" maxlength="500" rows="2" required>{{ waiver.reason if waiver else '' }}</textarea></label>
+            <label>Hết hạn (UTC) <input type="date" name="expires_on" min="{{ today_utc }}" value="{{ waiver.expires_on if waiver else '' }}" required></label>
+            <button class="text-btn" type="submit">Lưu ngoại lệ</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}<p class="empty-note">Không có phát hiện trong nhóm này.</p>{% endif %}
+  </section>
+  {% endfor %}
+</div>

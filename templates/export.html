@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo bảo mật #{{ scan_id }} · WebSecAnalyzer{% endblock %}
+{% block favicon %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="eyebrow">WebSecAnalyzer · Báo cáo #{{ scan_id }}</span><h1>Kết quả kiểm tra</h1><p class="lead">Bản HTML độc lập, có thể mở khi không có mạng.</p></div>
+{% include "_report.html" %}
+{% endblock %}

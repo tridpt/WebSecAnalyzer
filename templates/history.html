@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Lịch sử kiểm tra · WebSecAnalyzer{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="eyebrow">Lưu trên máy này</span><h1>Lịch sử kiểm tra</h1><p class="lead">Xem lại báo cáo và theo dõi điểm cấu hình qua từng lần quét.</p></div>
+{% if entries %}
+{% if entries|length > 1 %}
+<form class="panel compare-form" method="get" action="{{ url_for('compare_scans') }}">
+  <strong>So sánh hai lần quét</strong>
+  <label>Bản cũ <select name="old" required>{% for e in entries|reverse %}<option value="{{ e.id }}">#{{ e.id }} · {{ e.final_url }}</option>{% endfor %}</select></label>
+  <label>Bản mới <select name="new" required>{% for e in entries %}<option value="{{ e.id }}">#{{ e.id }} · {{ e.final_url }}</option>{% endfor %}</select></label>
+  <button class="text-btn" type="submit">So sánh</button>
+  <span>Chọn hai lần quét cùng URL.</span>
+</form>
+{% endif %}
+<div class="panel history-wrap"><table class="history-table"><thead><tr><th>Lần quét</th><th>Website</th><th>Điểm</th><th>Thời gian (UTC)</th><th>Báo cáo</th></tr></thead><tbody>
+{% for e in entries %}<tr><td>#{{ e.id }}</td><td class="url-cell">{{ e.final_url }}</td><td><span class="score-pill {{ score_class(e.overall_score) }}">{{ e.overall_score }}</span></td><td>{{ e.created_at[:19].replace('T', ' ') }}</td><td><div class="history-links"><a href="{{ url_for('view_scan', scan_id=e.id) }}">Xem</a><a href="{{ url_for('export_json', scan_id=e.id) }}">JSON</a><a href="{{ url_for('export_scan', scan_id=e.id) }}">HTML</a></div></td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}
+<div class="panel empty-state"><h2>Chưa có báo cáo nào</h2><p>Hãy kiểm tra website đầu tiên để tạo lịch sử.</p><a class="text-btn" href="{{ url_for('index') }}">Bắt đầu kiểm tra →</a></div>
+{% endif %}
+{% endblock %}

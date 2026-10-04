@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  {% block favicon %}<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">{% endblock %}
+  <title>{% block title %}WebSecAnalyzer · Kiểm tra bảo mật website{% endblock %}</title>
+  <style>{% include "_styles.html" %}</style>
+</head>
+<body>
+  <div class="app-shell">
+    {% block header %}
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="WebSecAnalyzer - trang chủ">
+        <span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2.6 20 6v5.4c0 5-3.2 8.6-8 10-4.8-1.4-8-5-8-10V6l8-3.4Z" stroke="currentColor" stroke-width="1.7"/><path d="m8.5 12 2.4 2.4 4.8-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span>WebSec<span class="brand-accent">Analyzer</span></span>
+      </a>
+      <nav class="nav" aria-label="Điều hướng chính">
+        <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Quét mới</a>
+        <a href="{{ url_for('history') }}" class="{{ 'active' if request.endpoint in ['history', 'view_scan'] else '' }}">Lịch sử</a>
+        <a href="{{ url_for('view_waivers') }}" class="{{ 'active' if request.endpoint == 'view_waivers' else '' }}">Ngoại lệ</a>
+      </nav>
+      <span class="local-badge"><span class="live-dot"></span> Công cụ cục bộ</span>
+    </header>
+    {% endblock %}
+    <main class="main-content">{% block content %}{% endblock %}</main>
+    {% block footer %}
+    <footer class="footer"><span>WebSecAnalyzer · Kiểm tra thụ động cho website bạn quản lý</span><span>Kết quả là dấu hiệu cấu hình, không thay thế kiểm thử chuyên sâu.</span></footer>
+    {% endblock %}
+  </div>
+</body>
+</html>

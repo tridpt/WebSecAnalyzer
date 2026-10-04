@@ -1,0 +1,92 @@
+{% set cls = score_class(report.overall_score) %}
+{% set counts = report.issue_counts %}
+{% set category_names = {'TLS/SSL Configuration': 'HTTPS & TLS', 'HTTP to HTTPS Redirect': 'Chuyển hướng HTTP → HTTPS', 'HTTP Security Headers': 'HTTP security headers', 'Content Security Policy': 'Content Security Policy', 'CORS': 'CORS', 'Cookie Flags': 'Bảo mật cookie', 'JavaScript Libraries': 'Thư viện JavaScript', 'npm Lockfile / OSV': 'npm Lockfile / OSV', 'API Access': 'Truy cập API', 'API Response Headers': 'Header phản hồi API', 'API Authentication Comparison': 'So sánh phiên đăng nhập', 'API Cross-Account Comparison': 'So sánh dữ liệu hai tài khoản', 'API CORS Preflight': 'CORS preflight (OPTIONS)', 'API CORS Credentialed': 'CORS với phiên thử nghiệm', 'API CORS Browser': 'CORS trong trình duyệt'} %}
+{% set severity_names = {'HIGH': 'Cao', 'MEDIUM': 'Trung bình', 'LOW': 'Thấp', 'INFO': 'Thông tin'} %}
+{% set browser_outcome_names = {'readable':'đọc được mã HTTP', 'blocked':'bị chặn', 'cookie_not_sent':'không gửi Cookie', 'inconclusive':'chưa kết luận'} %}
+{% set waivers_by_id = waivers_by_id|default({}) %}
+{% set can_manage_waivers = can_manage_waivers|default(false) %}
+<section class="panel summary-card" aria-label="Tổng quan kết quả">
+  <div class="score-ring {{ cls }}" style="--score: {{ report.overall_score }}%;" role="img" aria-label="Điểm tham khảo {{ report.overall_score }} trên 100"><div class="score-inner"><strong>{{ report.overall_score }}</strong><span>/ 100 điểm</span></div></div>
+  <div class="summary-meta">
+    <h3>{% if counts.HIGH %}Có vấn đề cần ưu tiên xử lý{% elif counts.MEDIUM %}Có cấu hình nên cải thiện{% else %}Chưa thấy vấn đề nghiêm trọng{% endif %}</h3>
+    <p class="summary-url">{{ report.final_url }} · HTTP {{ report.status_code }}</p>
+    <div class="stat-row">
+      {% if report.pages %}<span class="stat"><strong>{{ report.pages|length }}/{{ report.max_pages }}</strong> trang đã quét</span>{% endif %}
+      <span class="stat"><strong>{{ report.api_endpoints|length }}/{{ report.api_requested }}</strong> API đã kiểm tra</span>
+      {% if report.api_auth_mode != 'not_configured' %}<span class="stat"><strong>{{ report.api_endpoints|selectattr('api_auth_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }}</strong> API thử với tài khoản</span>{% endif %}
+      {% if report.api_compare_requested %}<span class="stat"><strong>{{ report.api_endpoints|selectattr('api_compared_pointers')|list|length }}/{{ report.api_compare_requested }}</strong> API so sánh hai tài khoản</span>{% endif %}
+      {% if report.api_cors_browser_enabled %}<span class="stat"><strong>{{ report.api_cors_browser_requested - report.api_cors_browser_skipped_paths|length }}/{{ report.api_cors_browser_requested }}</strong> API thử trong trình duyệt</span>{% endif %}
+      <span class="stat high"><strong>{{ counts.HIGH }}</strong> mức cao</span>
+      <span class="stat medium"><strong>{{ counts.MEDIUM }}</strong> mức trung bình</span>
+      <span class="stat low"><strong>{{ counts.LOW }}</strong> mức thấp</span>
+      <span class="stat"><strong>{{ report.checked_categories }}/{{ report.total_categories }}</strong> nhóm hoàn tất</span>
+    </div>
+  </div>
+</section>
+<section class="panel coverage-card" aria-labelledby="coverage-title">
+  <h2 id="coverage-title">Phạm vi của điểm số</h2>
+  <p>Điểm chỉ phản ánh {{ report.pages|length }} trang HTML và {{ report.api_endpoints|length }} endpoint API đã kiểm tra, cùng các kiểm tra chung của website. Các URL và API chưa kiểm tra không được tính vào điểm.</p>
+  <p>“Có bằng chứng” nghĩa là quan sát trực tiếp cấu hình hoặc phản hồi, không khẳng định đã khai thác được. “Nghi ngờ” cần kiểm tra thủ công; “Không kết luận được” là phép kiểm tra thiếu dữ liệu. Ngoại lệ có thời hạn không thay đổi phát hiện hoặc điểm gốc.</p>
+  <div class="coverage-grid">
+    <span><strong>HTML</strong>{{ report.pages|length }} trang / giới hạn {{ report.max_pages }}; {{ report.skipped_urls }} URL phát hiện nhưng bỏ qua hoặc chưa quét</span>
+    <span><strong>OpenAPI</strong>{% if report.openapi_status == 'loaded' %}Đã liệt kê {{ report.api_discovered }} thao tác; chưa tự động kiểm tra các route này{% elif report.openapi_status == 'not_requested' %}Chưa yêu cầu đọc{% elif report.openapi_status == 'invalid' %}Tài liệu không phải OpenAPI hợp lệ{% elif report.openapi_status == 'unavailable' %}Không truy cập được tài liệu{% else %}Không đọc được tài liệu ({{ report.openapi_status }}){% endif %}</span>
+    <span><strong>API</strong>{{ report.api_endpoints|length }}/{{ report.api_requested }} endpoint đã chọn được kiểm tra; {{ report.api_skipped }} bỏ qua{% if not report.api_requested %} · Chưa kiểm tra truy cập API{% endif %}</span>
+    {% if report.api_requested %}<span><strong>CORS OPTIONS</strong>{{ report.api_endpoints|selectattr('api_cors_preflight_status_code', 'ne', none)|list|length }}/{{ report.api_requested }} endpoint có phản hồi preflight</span>{% endif %}
+    <span><strong>Phiên thử nghiệm</strong>{% if report.api_auth_mode == 'not_configured' %}Chưa dùng tài khoản thử nghiệm{% else %}{{ report.api_endpoints|selectattr('api_auth_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }} API dự kiến riêng tư đã nhận phản hồi qua {{ 'Cookie' if report.api_auth_mode == 'cookie' else 'Bearer token' }}{% endif %}</span>
+    {% if report.api_auth_requested %}<span><strong>CORS có phiên</strong>{{ report.api_endpoints|selectattr('api_cors_credentialed_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }} API riêng tư có phản hồi GET từ Origin thử nghiệm</span>{% endif %}
+    {% if report.api_cors_browser_enabled %}<span><strong>Trình duyệt</strong>{{ report.api_cors_browser_requested - report.api_cors_browser_skipped_paths|length }}/{{ report.api_cors_browser_requested }} API riêng tư đã xác minh; chỉ thử mã HTTP, không đọc body</span>{% endif %}
+    {% if report.api_compare_requested %}<span><strong>Hai tài khoản</strong>{{ report.api_endpoints|selectattr('api_compared_pointers')|list|length }}/{{ report.api_compare_requested }} API có trường JSON so sánh được; chỉ lưu kết quả trùng/khác</span>{% endif %}
+  </div>
+  {% if report.api_skipped_paths %}<p>API đã chọn nhưng chưa kiểm tra: {% for path in report.api_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_selected_paths %}<p>Path API đã chọn: {% for path in report.api_selected_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_auth_skipped_paths %}<p>Phiên thử nghiệm chưa kiểm tra được: {% for path in report.api_auth_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_cors_preflight_skipped_paths %}<p>Preflight OPTIONS chưa kiểm tra được: {% for path in report.api_cors_preflight_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_cors_credentialed_skipped_paths %}<p>CORS với phiên thử nghiệm chưa kiểm tra được: {% for path in report.api_cors_credentialed_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_cors_browser_skipped_paths %}<p>CORS trong trình duyệt chưa kết luận được: {% for path in report.api_cors_browser_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_compare_skipped_paths %}<p>Hai tài khoản chưa so sánh đầy đủ: {% for path in report.api_compare_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.api_routes %}
+  <details class="route-list"><summary>Route OpenAPI đã phát hiện (hiển thị {{ report.api_routes|length }}/{{ report.api_discovered }})</summary><ul>{% for route in report.api_routes %}<li><code>{{ route.method }} {{ route.path }}</code> · {{ 'Có khai báo xác thực' if route.auth_declared else 'Chưa khai báo xác thực' }}</li>{% endfor %}</ul></details>
+  {% endif %}
+</section>
+{% if report.pages %}
+<p class="report-note">Điểm phạm vi đã quét bằng điểm thấp nhất trong các trang HTML và endpoint API đã kiểm tra (gồm kiểm tra HTTPS chung). Đây là điểm tham khảo, không phải chứng nhận an toàn.</p>
+<section class="panel page-overview" aria-labelledby="pages-title">
+  <h2 id="pages-title">Kết quả theo từng trang</h2>
+  <p>Chọn một trang để xem phát hiện và cách xử lý. Mỗi trang giữ điểm riêng để dễ tìm trang cấu hình yếu.</p>
+  <div class="page-list">
+    {% for page in report.pages %}
+    <a class="page-row" href="#page-{{ loop.index }}"><span>{{ page.final_url }}</span><span class="score-pill {{ score_class(report.page_score(page)) }}">{{ report.page_score(page) }}</span></a>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="section-heading"><h2>Kiểm tra chung của website</h2><span>HTTPS, chuyển hướng và giao thức TLS</span></div>
+{% set categories = report.results %}{% set section_id = 'site' %}{% set surface = 'site' %}{% set location = report.final_url %}
+{% include "_categories.html" %}
+
+<div class="section-heading"><h2>Phát hiện theo trang</h2><span>{{ report.pages|length }} trang HTML</span></div>
+{% for page in report.pages %}
+<section class="page-report" id="page-{{ loop.index }}">
+  <h3>{{ '%02d'|format(loop.index) }} · {{ page.final_url }}</h3>
+  <p class="report-note">HTTP {{ page.status_code }} · Điểm {{ report.page_score(page) }}/100 · {{ page.issue_counts.HIGH }} cao, {{ page.issue_counts.MEDIUM }} trung bình, {{ page.issue_counts.LOW }} thấp</p>
+  {% set categories = page.results %}{% set section_id = 'page-' ~ loop.index %}{% set surface = 'html' %}{% set location = page.final_url %}
+  {% include "_categories.html" %}
+</section>
+{% endfor %}
+{% else %}
+<p class="report-note">Điểm số chỉ dựa trên cấu hình và thông tin công khai của trang được quét. Một điểm cao không xác nhận website không có lỗ hổng.</p>
+<div class="section-heading"><h2>Chi tiết phát hiện</h2><span>Ưu tiên từ mức cao đến thông tin</span></div>
+{% set categories = report.results %}{% set section_id = 'site' %}{% set surface = 'site' %}{% set location = report.final_url %}
+{% include "_categories.html" %}
+{% endif %}
+{% if report.api_endpoints %}
+<div class="section-heading"><h2>Endpoint API đã kiểm tra</h2><span>{{ report.api_endpoints|length }} endpoint GET</span></div>
+{% for endpoint in report.api_endpoints %}
+<section class="page-report" id="api-{{ loop.index }}">
+  <h3>{{ '%02d'|format(loop.index) }} · {{ endpoint.final_url }}</h3>
+  <p class="report-note">Ẩn danh HTTP {{ endpoint.status_code }}{% if endpoint.api_cors_preflight_status_code is not none %} · OPTIONS HTTP {{ endpoint.api_cors_preflight_status_code }}{% endif %}{% if endpoint.api_auth_status_code is not none %} · Tài khoản A HTTP {{ endpoint.api_auth_status_code }}{% endif %}{% if endpoint.api_cors_credentialed_status_code is not none %} · CORS có phiên HTTP {{ endpoint.api_cors_credentialed_status_code }}{% endif %}{% if endpoint.api_cors_browser_outcome %} · Trình duyệt: {{ browser_outcome_names.get(endpoint.api_cors_browser_outcome, 'chưa kết luận') }}{% endif %}{% if endpoint.api_second_auth_status_code is not none %} · Tài khoản B HTTP {{ endpoint.api_second_auth_status_code }}{% endif %} · Điểm {{ report.page_score(endpoint) }}/100 · {% if report.api_compare_requested %}Trường JSON đã chọn chỉ so sánh trong bộ nhớ{% else %}Chỉ đọc header{% endif %}, không lưu nội dung phản hồi</p>
+  {% set categories = endpoint.results %}{% set section_id = 'api-' ~ loop.index %}{% set surface = 'api' %}{% set location = endpoint.final_url %}
+  {% include "_categories.html" %}
+</section>
+{% endfor %}
+{% endif %}

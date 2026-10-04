@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Đang quét · WebSecAnalyzer{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="eyebrow">Lượt quét hiện tại</span><h1 id="job-heading">{{ 'Đang kiểm tra website…' if job.status == 'running' else 'Lượt quét đã dừng' }}</h1></div>
+<section class="panel job-panel" aria-live="polite">
+  <p id="job-message">{{ job.error if job.error else 'Có thể hủy lúc nào cũng được. Báo cáo chỉ được lưu khi quét xong.' }}</p>
+  {% if job.status == 'running' %}
+  <form method="post" action="{{ url_for('cancel_job', job_id=job_id) }}" id="cancel-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="text-btn" type="submit">Hủy lần quét</button>
+  </form>
+  {% endif %}
+  <a class="text-btn" href="{{ url_for('index') }}">Quét website khác</a>
+</section>
+{% if job.status == 'running' %}
+<script>
+  const statusUrl = {{ url_for('job_status', job_id=job_id)|tojson }};
+  async function refreshJob() {
+    try {
+      const response = await fetch(statusUrl, {cache: 'no-store'});
+      if (!response.ok) return;
+      const job = await response.json();
+      if (job.status === 'done' && job.report_url) {
+        window.location.assign(job.report_url);
+      } else if (job.status !== 'running') {
+        document.getElementById('job-heading').textContent = 'Lượt quét đã dừng';
+        document.getElementById('job-message').textContent = job.error || 'Lượt quét đã dừng.';
+        document.getElementById('cancel-form')?.remove();
+      } else {
+        setTimeout(refreshJob, 1000);
+      }
+    } catch (_) { setTimeout(refreshJob, 2000); }
+  }
+  setTimeout(refreshJob, 700);
+</script>
+{% endif %}
+{% endblock %}
