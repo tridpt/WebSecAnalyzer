@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
+from .impacts import infer_impact
+
 
 class Severity(IntEnum):
     """Severity of a finding. Higher value = more severe."""
@@ -75,6 +77,7 @@ class Finding:
     recommendation: str = ""
     evidence: str = ""
     verification: Verification = Verification.SUSPECTED
+    impact: str = ""
 
 
 @dataclass
@@ -94,11 +97,17 @@ class CheckResult:
         recommendation: str = "",
         evidence: str = "",
         verification: Verification | None = None,
+        impact: str | None = None,
     ) -> None:
+        resolved_impact = (
+            "" if severity == Severity.INFO else
+            impact if impact is not None else infer_impact(self.category, check, title)
+        )
         self.findings.append(
             Finding(
                 check, title, severity, detail, recommendation, evidence,
                 verification or infer_verification(self.category, check, title),
+                resolved_impact,
             )
         )
 

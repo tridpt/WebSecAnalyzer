@@ -135,6 +135,8 @@ def render_text(report: ScanReport, use_color: bool = True) -> str:
                 )
                 lines.append(f"  {tag} {finding.title} [{finding.verification.label}]")
                 lines.append(f"         {finding.detail}")
+                if finding.impact:
+                    lines.append(f"         Nếu không sửa: {finding.impact}")
                 if finding.recommendation:
                     lines.append(f"         -> {finding.recommendation}")
                 if finding.evidence:
@@ -267,6 +269,7 @@ def to_dict(report: ScanReport) -> dict:
                         "title": f.title,
                         "severity": f.severity.label,
                         "detail": f.detail,
+                        "impact": f.impact,
                         "recommendation": f.recommendation,
                         "evidence": f.evidence,
                         "verification": f.verification.value,

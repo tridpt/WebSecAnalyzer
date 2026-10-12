@@ -26,7 +26,7 @@
 <section class="panel coverage-card" aria-labelledby="coverage-title">
   <h2 id="coverage-title">Phạm vi của điểm số</h2>
   <p>Điểm chỉ phản ánh {{ report.pages|length }} trang HTML và {{ report.api_endpoints|length }} endpoint API đã kiểm tra, cùng các kiểm tra chung của website. Các URL và API chưa kiểm tra không được tính vào điểm.</p>
-  <p>“Có bằng chứng” nghĩa là quan sát trực tiếp cấu hình hoặc phản hồi, không khẳng định đã khai thác được. “Nghi ngờ” cần kiểm tra thủ công; “Không kết luận được” là phép kiểm tra thiếu dữ liệu. Ngoại lệ có thời hạn không thay đổi phát hiện hoặc điểm gốc.</p>
+  <p>“Có bằng chứng” nghĩa là quan sát trực tiếp cấu hình hoặc phản hồi, không khẳng định đã khai thác được. “Nghi ngờ” cần kiểm tra thủ công; “Không kết luận được” là phép kiểm tra thiếu dữ liệu. Mục “Nếu không sửa” mô tả tình huống có thể xảy ra, không xác nhận đã có khai thác. Ngoại lệ có thời hạn không thay đổi phát hiện hoặc điểm gốc.</p>
   <div class="coverage-grid">
     <span><strong>HTML</strong>{{ report.pages|length }} trang / giới hạn {{ report.max_pages }}; {{ report.skipped_urls }} URL phát hiện nhưng bỏ qua hoặc chưa quét</span>
     {% if report.js_discovery_enabled %}<span><strong>JavaScript</strong>{% if report.js_discovery_status == 'completed' %}Đã khám phá{% elif report.js_discovery_status == 'partial' %}Khám phá một phần{% else %}Không chạy được{% endif %}; {{ report.js_discovered_urls }} URL mới{% if report.js_discovery_error %} · {{ report.js_discovery_error }}{% endif %}</span>{% endif %}

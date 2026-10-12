@@ -32,6 +32,7 @@ def _issues(report: ScanReport) -> dict[tuple[str, str, str, str, str], dict]:
                     ),
                     "severity": finding.severity.name,
                     "detail": finding.detail,
+                    "impact": finding.impact,
                     "recommendation": finding.recommendation,
                     "evidence": finding.evidence,
                     "verification": finding.verification.value,

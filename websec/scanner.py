@@ -201,6 +201,7 @@ class ScanReport:
                     detail=finding["detail"],
                     recommendation=finding.get("recommendation", ""),
                     evidence=finding.get("evidence", ""),
+                    impact=finding.get("impact"),
                     verification=(
                         Verification(finding["verification"])
                         if "verification" in finding else None
