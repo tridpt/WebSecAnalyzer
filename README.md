@@ -80,7 +80,7 @@ Có thể dùng `--auth-second-bearer-env` cho tài khoản B. Tài khoản A g�
 | Nhóm | Nội dung |
 | --- | --- |
 | HTTPS & TLS | Giao thức đang dùng, chứng chỉ/đơn vị cấp/hạn chứng chỉ, thử TLS 1.0 và 1.1; kiểm tra HTTP có chuyển trực tiếp sang HTTPS cùng tên miền |
-| HTTP headers | HSTS trên HTTPS, X-Content-Type-Options, chống nhúng iframe, Referrer-Policy, Permissions-Policy, header tiết lộ phần mềm |
+| HTTP headers | Kiểm tra sự hiện diện và giá trị HSTS trên HTTPS, `nosniff`, X-Frame-Options/CSP `frame-ancestors`, Referrer-Policy, cú pháp cơ bản và quyền mở rộng của Permissions-Policy, header tiết lộ phần mềm; API riêng tư còn kiểm tra chỉ thị `Cache-Control: no-store` |
 | CSP và CORS | CSP thiếu/yếu, nguồn script rộng, unsafe-inline/eval, thử một Origin lạ trên trang đầu, CORS wildcard/phản chiếu Origin/credentials; hiện bằng chứng header và cách sửa |
 | Cookie | HttpOnly, Secure, SameSite hợp lệ, `SameSite=None` với Secure, quy tắc `__Host-`/`__Secure-`; giá trị cookie được ẩn trong bằng chứng |
 | Tài nguyên HTML | Trên trang HTTPS, phát hiện script/stylesheet/iframe/ảnh/media khai báo URL HTTP, form có action HTTP và script HTTPS khác origin thiếu `integrity`; URL bằng chứng được che query. Chỉ đọc HTML đã tải, không gửi thêm yêu cầu tới tài nguyên |

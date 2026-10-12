@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass, field
 from urllib.parse import unquote, urlsplit
 
+from .evidence import safe_header_value
 from .findings import CheckResult, Severity, Verification
 from .targets import InvalidTarget, is_loopback_host
 
@@ -357,17 +358,19 @@ def check_api_headers(response, *, expect_auth: bool) -> CheckResult:
     cache = response.headers.get("Cache-Control", "")
     content_type = response.headers.get("Content-Type", "")
     evidence = (
-        f"Content-Type: {content_type[:100] or '[không có]'}; "
-        f"X-Content-Type-Options: {nosniff[:60] or '[không có]'}; "
-        f"Cache-Control: {cache[:100] or '[không có]'}"
+        f"Content-Type: {safe_header_value(content_type)[:100] if content_type else '[không có]'}; "
+        f"X-Content-Type-Options: {safe_header_value(nosniff)[:60] if nosniff else '[không có]'}; "
+        f"Cache-Control: {safe_header_value(cache)[:100] if cache else '[không có]'}"
     )
-    if nosniff.lower() != "nosniff":
+    if nosniff.strip().lower() != "nosniff":
         result.add(
-            "api-nosniff", "API thiếu X-Content-Type-Options: nosniff", Severity.LOW,
-            "Trình duyệt có thể đoán kiểu nội dung khác với Content-Type khai báo.",
-            "Thêm X-Content-Type-Options: nosniff cho phản hồi API.", evidence,
+            "api-nosniff", "API thiếu X-Content-Type-Options: nosniff" if not nosniff else
+            "API có X-Content-Type-Options không hợp lệ", Severity.LOW,
+            "Chỉ giá trị nosniff mới ngăn trình duyệt đoán kiểu nội dung khác với Content-Type khai báo.",
+            "Đặt X-Content-Type-Options: nosniff cho phản hồi API.", evidence,
         )
-    if expect_auth and 200 <= response.status_code < 300 and "no-store" not in cache.lower():
+    cache_directives = {part.strip().lower() for part in cache.split(",")}
+    if expect_auth and 200 <= response.status_code < 300 and "no-store" not in cache_directives:
         result.add(
             "api-cache", "API riêng tư chưa đặt Cache-Control: no-store", Severity.MEDIUM,
             "Phản hồi dự kiến chứa dữ liệu riêng nhưng chưa ngăn lưu vào bộ nhớ đệm.",

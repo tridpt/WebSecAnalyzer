@@ -13,7 +13,7 @@ import requests
 import websec.scanner as scanner_module
 from websec.compare import new_high_issues
 from websec.api import (
-    check_api_cross_account, parse_api_credential, parse_api_targets,
+    check_api_cross_account, check_api_headers, parse_api_credential, parse_api_targets,
     parse_comparison_fields, parse_openapi, selectable_get_routes,
     validate_api_auth_transport, validate_openapi_path,
 )
@@ -24,6 +24,24 @@ from websec.api_preview import preview_openapi
 from websec.report import render_json, render_text, to_dict
 from websec.scanner import ScanReport, scan
 from websec.targets import InvalidTarget
+
+
+def test_api_header_values_require_real_nosniff_and_no_store_directive():
+    response = SimpleNamespace(
+        status_code=200,
+        headers={
+            "Content-Type": "application/json",
+            "X-Content-Type-Options": "invalid",
+            "Cache-Control": "x-no-store",
+        },
+    )
+    checks = {f.check for f in check_api_headers(response, expect_auth=True).findings}
+    assert {"api-nosniff", "api-cache"} <= checks
+    response.headers["Cache-Control"] = "no-store=maybe"
+    assert "api-cache" in {f.check for f in check_api_headers(response, expect_auth=True).findings}
+    response.headers["X-Content-Type-Options"] = " NoSniff "
+    response.headers["Cache-Control"] = "private, no-store"
+    assert {f.check for f in check_api_headers(response, expect_auth=True).findings} == {"api-headers-ok"}
 
 
 def test_api_target_validation_and_openapi_metadata():

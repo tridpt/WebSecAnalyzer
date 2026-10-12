@@ -92,7 +92,8 @@ def redact_url(url: str) -> str:
         return "[URL REDACTED]"
 
 
-def _safe_value(value: str, redact_values: list[str] | None = None) -> str:
+def safe_header_value(value: str, redact_values: list[str] | None = None) -> str:
+    """Keep a short header value while removing common credential patterns."""
     value = value.replace("\r", " ").replace("\n", " ")[:1000]
     for secret in sorted((item for item in (redact_values or []) if item), key=len, reverse=True):
         value = value.replace(secret, "[REDACTED]")
@@ -159,7 +160,7 @@ def snapshot_response(
         if value
     )
     headers = {
-        name: _safe_value(value, reflected_values)
+        name: safe_header_value(value, reflected_values)
         for name in _SAFE_HEADERS
         if (value := response.headers.get(name)) is not None
     }
@@ -178,7 +179,7 @@ def snapshot_response(
     if cookies := _redacted_cookies(response):
         headers["Set-Cookie"] = cookies
     selected_request_headers = {
-        name: _safe_value(value, reflected_values)
+        name: safe_header_value(value, reflected_values)
         for name in _SAFE_REQUEST_HEADERS
         if (value := (request_headers or {}).get(name)) is not None
     }

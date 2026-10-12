@@ -81,7 +81,84 @@ def test_short_hsts_is_flagged():
 
 def test_leaky_server_header_flagged():
     headers = dict(_SECURE_HEADERS)
-    headers["Server"] = "nginx/1.18.0"
+    headers["Server"] = "nginx/1.18.0 token=PRIVATE"
     result = check_headers(FakeResponse(headers=headers))
     leaks = [f for f in result.findings if f.check == "server"]
     assert leaks and leaks[0].severity == Severity.LOW
+    assert "PRIVATE" not in leaks[0].detail
+
+
+def test_nosniff_requires_exact_value():
+    headers = dict(_SECURE_HEADERS)
+    headers["X-Content-Type-Options"] = "nosniff, nosniff"
+    finding = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                   if f.check == "x-content-type-options")
+    assert finding.severity == Severity.MEDIUM
+    assert "nosniff, nosniff" in finding.evidence
+    headers["X-Content-Type-Options"] = "  NoSniff  "
+    assert "x-content-type-options" not in _checks(check_headers(FakeResponse(headers=headers)))
+
+
+def test_xfo_invalid_but_valid_csp_frame_ancestors_is_lower_risk():
+    headers = dict(_SECURE_HEADERS)
+    headers["X-Frame-Options"] = "ALLOW-FROM https://other.test"
+    invalid = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                   if f.check == "x-frame-options")
+    assert invalid.severity == Severity.MEDIUM
+    headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'self'"
+    fallback = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                    if f.check == "x-frame-options")
+    assert fallback.severity == Severity.LOW
+
+
+def test_broad_frame_ancestors_overrides_valid_xfo_and_report_only_does_not_count():
+    headers = dict(_SECURE_HEADERS)
+    headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors *"
+    assert "frame-ancestors" in _checks(check_headers(FakeResponse(headers=headers)))
+    headers["Content-Security-Policy"] = "default-src 'self'"
+    headers.pop("X-Frame-Options")
+    headers["Content-Security-Policy-Report-Only"] = "frame-ancestors 'none'"
+    assert "x-frame-options" in _checks(check_headers(FakeResponse(headers=headers)))
+    headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors https://trusted.test"
+    assert "x-frame-options" not in _checks(check_headers(FakeResponse(headers=headers)))
+    headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors javascript:"
+    assert "frame-ancestors" in _checks(check_headers(FakeResponse(headers=headers)))
+
+
+def test_referrer_policy_uses_last_recognized_value():
+    headers = dict(_SECURE_HEADERS)
+    headers["Referrer-Policy"] = "no-referrer, unsafe-url"
+    weak = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                if f.check == "referrer-policy")
+    assert weak.severity == Severity.MEDIUM
+    headers["Referrer-Policy"] = "unsafe-url, no-referrer"
+    assert "referrer-policy" not in _checks(check_headers(FakeResponse(headers=headers)))
+    headers["Referrer-Policy"] = "not-a-policy"
+    assert "referrer-policy" in _checks(check_headers(FakeResponse(headers=headers)))
+
+
+def test_permissions_policy_flags_malformed_and_broad_but_accepts_scoped():
+    headers = dict(_SECURE_HEADERS)
+    headers["Permissions-Policy"] = 'camera=*, geolocation=(self), microphone=("https://trusted.test")'
+    result = check_headers(FakeResponse(headers=headers))
+    assert "permissions-policy-broad" in _checks(result)
+    assert "permissions-policy-invalid" not in _checks(result)
+    headers["Permissions-Policy"] = 'camera=("https://trusted.test/path?token=PRIVATE")'
+    invalid = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                   if f.check == "permissions-policy-invalid")
+    assert "PRIVATE" not in invalid.evidence
+    headers["Permissions-Policy"] = 'camera=(), microphone=(self), geolocation=("https://trusted.test")'
+    assert all(f.severity == Severity.INFO for f in check_headers(FakeResponse(headers=headers)).findings)
+
+
+def test_hsts_zero_duplicate_and_malformed_max_age_are_not_treated_as_valid():
+    headers = dict(_SECURE_HEADERS)
+    for value in ("max-age=0", "max-age=31536000; max-age=31536000", "max-age=bogus", ""):
+        headers["Strict-Transport-Security"] = value
+        finding = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                       if f.check == "strict-transport-security")
+        assert finding.severity == Severity.HIGH
+    headers["Strict-Transport-Security"] = "max-age=3600"
+    finding = next(f for f in check_headers(FakeResponse(headers=headers)).findings
+                   if f.check == "strict-transport-security")
+    assert finding.severity == Severity.MEDIUM

@@ -32,6 +32,10 @@ _IMPACTS = {
         "Nếu trang có thao tác nhạy cảm và bị nhúng vào iframe của website khác, kẻ tấn công "
         "có thể che lớp giao diện để dụ người dùng bấm nhầm (clickjacking)."
     ),
+    "frame-ancestors": (
+        "Nếu chính sách thực tế cho phép website khác nhúng trang có thao tác nhạy cảm, "
+        "kẻ tấn công có thể che lớp giao diện để dụ người dùng bấm nhầm (clickjacking)."
+    ),
     "referrer-policy": (
         "Trong một số luồng điều hướng, URL nguồn có thể được gửi cho website khác qua Referer; "
         "query chứa mã hoặc định danh nhạy cảm có thể bị lộ."
@@ -39,6 +43,14 @@ _IMPACTS = {
     "permissions-policy": (
         "Nếu script hoặc iframe không tin cậy chạy trên trang, chúng có thể thử dùng các tính năng "
         "trình duyệt chưa bị giới hạn; quyền camera/vị trí vẫn phụ thuộc cấp phép của người dùng."
+    ),
+    "permissions-policy-invalid": (
+        "Trình duyệt có thể bỏ qua chỉ thị sai cú pháp, khiến tính năng bị giới hạn ít hơn "
+        "dự kiến; quyền camera/vị trí vẫn cần người dùng cấp riêng."
+    ),
+    "permissions-policy-broad": (
+        "Mã ở origin không tin cậy có thể thử yêu cầu tính năng được mở rộng khi được nhúng; "
+        "trình duyệt vẫn có thể yêu cầu người dùng cấp quyền."
     ),
     "csp-missing": (
         "Nếu website có điểm chèn HTML hoặc script, thiếu CSP khiến mã chèn có ít rào cản hơn "
