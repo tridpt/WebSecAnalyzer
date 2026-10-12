@@ -44,6 +44,7 @@ _PURPOSES = {
     "Content Security Policy": {"page"},
     "Cookie Flags": {"page"},
     "JavaScript Libraries": {"page"},
+    "HTML Resource Security": {"page"},
     "CORS": {"page", "cors_probe", "api_anonymous", "api_cors_probe"},
     "API Access": {"api_anonymous"},
     "API Response Headers": {"api_anonymous"},

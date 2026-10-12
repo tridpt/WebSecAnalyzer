@@ -58,6 +58,7 @@ def infer_verification(category: str, check: str, title: str) -> Verification:
     directly_observed = {
         "TLS/SSL Configuration", "HTTP to HTTPS Redirect", "HTTP Security Headers",
         "Content Security Policy", "CORS", "Cookie Flags", "npm Lockfile / OSV",
+        "HTML Resource Security",
         "API Access", "API Response Headers",
     }
     return Verification.OBSERVED if category in directly_observed else Verification.SUSPECTED

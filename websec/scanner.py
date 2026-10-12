@@ -27,6 +27,7 @@ from .browser_cors import (
 from .fetch import RequestPacer, fetch, origin
 from .findings import CheckResult, Severity, Verification
 from .headers import check_headers
+from .html_resources import check_html_resources
 from .https_redirect import check_https_redirect
 from .libraries import check_libraries
 from .lockfiles import check_lockfile, parse_lockfile
@@ -382,6 +383,8 @@ def scan(
                 check_cors(response, probe_response if index == 0 else None),
                 check_cookies(response),
             ]
+            if response.url.lower().startswith("https://"):
+                page_results.append(check_html_resources(response))
             if packages is None:
                 page_results.append(check_libraries(
                     response, use_osv=use_osv,

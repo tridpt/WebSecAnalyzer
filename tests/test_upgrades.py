@@ -261,6 +261,7 @@ def test_scanner_uses_lockfile_and_policy_checks():
     assert "npm Lockfile / OSV" in {r.category for r in report.results}
     categories = {r.category: r for r in report.pages[0].results}
     assert {"Content Security Policy", "CORS", "Cookie Flags"} <= categories.keys()
+    assert "HTML Resource Security" not in categories  # The local test server uses HTTP.
     assert "JavaScript Libraries" not in categories
     assert any(f.check == "cors-reflection" for f in categories["CORS"].findings)
 

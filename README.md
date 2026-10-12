@@ -83,6 +83,7 @@ Có thể dùng `--auth-second-bearer-env` cho tài khoản B. Tài khoản A g�
 | HTTP headers | HSTS trên HTTPS, X-Content-Type-Options, chống nhúng iframe, Referrer-Policy, Permissions-Policy, header tiết lộ phần mềm |
 | CSP và CORS | CSP thiếu/yếu, nguồn script rộng, unsafe-inline/eval, thử một Origin lạ trên trang đầu, CORS wildcard/phản chiếu Origin/credentials; hiện bằng chứng header và cách sửa |
 | Cookie | HttpOnly, Secure, SameSite hợp lệ, `SameSite=None` với Secure, quy tắc `__Host-`/`__Secure-`; giá trị cookie được ẩn trong bằng chứng |
+| Tài nguyên HTML | Trên trang HTTPS, phát hiện script/stylesheet/iframe/ảnh/media khai báo URL HTTP, form có action HTTP và script HTTPS khác origin thiếu `integrity`; URL bằng chứng được che query. Chỉ đọc HTML đã tải, không gửi thêm yêu cầu tới tài nguyên |
 | Thư viện JavaScript | Khi có lockfile: tra OSV theo phiên bản npm chính xác (tối đa 200 cặp gói/phiên bản). Khi không có: nhận diện phiên bản trong URL script và tra OSV nếu bật |
 | API tùy chọn | Đọc metadata OpenAPI; với GET được chọn, xem mã trạng thái ẩn danh, `X-Content-Type-Options`, `Cache-Control`, CORS với một Origin thử nghiệm và OPTIONS preflight; nếu cấp phiên thử nghiệm, kiểm tra thêm GET có Origin lạ và so sánh mã trạng thái hoặc trường JSON bạn chọn |
 
