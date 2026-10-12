@@ -17,6 +17,14 @@ def checked_scope(report: ScanReport) -> dict[str, list[ScopeEntry]]:
     return {
         "site": [entry(report)],
         "html": [entry(page) for page in report.pages],
+        "auth_html": [
+            {
+                **entry(page),
+                "anonymous_status_code": page.auth_anonymous_status_code,
+                "access_verified": page.auth_verified,
+            }
+            for page in report.auth_pages
+        ],
         "api": [
             {
                 **entry(endpoint),
@@ -38,7 +46,7 @@ def missing_baseline_scope(old: ScanReport, new: ScanReport) -> list[ScopeEntry]
     old_scope = checked_scope(old)
     new_scope = checked_scope(new)
     missing: list[ScopeEntry] = []
-    for surface in ("site", "html", "api"):
+    for surface in ("site", "html", "auth_html", "api"):
         current = {
             (entry["requested_url"], entry["final_url"]): entry
             for entry in new_scope[surface]
@@ -47,6 +55,10 @@ def missing_baseline_scope(old: ScanReport, new: ScanReport) -> list[ScopeEntry]
             matched = current.get((entry["requested_url"], entry["final_url"]))
             if matched is None:
                 missing.append({"surface": surface, **entry})
+                continue
+            if surface == "auth_html":
+                if entry.get("access_verified") is True and matched.get("access_verified") is not True:
+                    missing.append({"surface": surface, **entry})
                 continue
             if surface != "api":
                 continue
@@ -90,6 +102,12 @@ def missing_baseline_scope(old: ScanReport, new: ScanReport) -> list[ScopeEntry]
         if path not in new.api_selected_paths or path in new.api_skipped_paths:
             missing.append({
                 "surface": "api_selected", "requested_url": path, "final_url": path,
+            })
+    for path in old.auth_page_selected_paths:
+        if path not in new.auth_page_selected_paths or path in new.auth_page_skipped_paths:
+            missing.append({
+                "surface": "auth_html_selected", "requested_url": path,
+                "final_url": path,
             })
     if (old.js_discovery_status == "completed"
             and new.js_discovery_status != "completed"):

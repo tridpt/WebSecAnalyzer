@@ -179,6 +179,33 @@ def test_invalid_test_account_input_is_not_echoed():
     assert "WEB_FORM_SECRET_DO_NOT_ECHO" not in response.get_data(as_text=True)
 
 
+def test_form_accepts_html_paths_with_session_without_api(monkeypatch):
+    client = web_app.app.test_client()
+    client.get("/")
+    with client.session_transaction() as user_session:
+        csrf_token = user_session["csrf_token"]
+    options_seen = []
+    monkeypatch.setattr(web_app, "scan", lambda **options: (
+        options_seen.append(options) or _report()
+    ))
+    monkeypatch.setattr(web_app.storage, "save_report", lambda report: 17)
+    response = client.post("/", data={
+        "url": "http://localhost:8001", "owns": "on", "csrf_token": csrf_token,
+        "auth_html_paths": "/dashboard\n/account/settings",
+        "api_auth_mode": "cookie", "api_auth_secret": "session=HTML_FORM_SECRET",
+    })
+    assert response.status_code == 302
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and not options_seen:
+        time.sleep(0.01)
+    assert options_seen[0]["auth_html_paths"] == ["/dashboard", "/account/settings"]
+    assert options_seen[0]["api_paths"] == []
+    assert options_seen[0]["api_credential"].secret == "session=HTML_FORM_SECRET"
+    assert "HTML_FORM_SECRET" not in str(response.headers)
+    with client.session_transaction() as user_session:
+        assert "HTML_FORM_SECRET" not in str(dict(user_session))
+
+
 def test_cancel_running_job(monkeypatch):
     def slow_scan(*args, control, **kwargs):
         while True:

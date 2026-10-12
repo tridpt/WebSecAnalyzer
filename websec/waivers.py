@@ -52,6 +52,8 @@ def finding_refs(report: ScanReport) -> Iterator[FindingRef]:
     yield from collect("site", report.final_url, report.results)
     for page in report.pages:
         yield from collect("html", page.final_url, page.results)
+    for page in report.auth_pages:
+        yield from collect("auth_html", page.final_url, page.results)
     for endpoint in report.api_endpoints:
         yield from collect("api", endpoint.final_url, endpoint.results)
 
@@ -103,7 +105,7 @@ class Waiver:
             waiver = cls(**{name: value[name] for name in cls.__dataclass_fields__})
             if any(not isinstance(item, str) for item in asdict(waiver).values()):
                 raise ValueError("non-string field")
-            if waiver.surface not in {"site", "html", "api"}:
+            if waiver.surface not in {"site", "html", "auth_html", "api"}:
                 raise ValueError("invalid surface")
             if (
                 not waiver.reason.strip() or len(waiver.reason) > 500

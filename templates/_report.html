@@ -11,9 +11,10 @@
     <h3>{% if counts.HIGH %}Có vấn đề cần ưu tiên xử lý{% elif counts.MEDIUM %}Có cấu hình nên cải thiện{% else %}Chưa thấy vấn đề nghiêm trọng{% endif %}</h3>
     <p class="summary-url">{{ report.final_url }} · HTTP {{ report.status_code }}</p>
     <div class="stat-row">
-      {% if report.pages %}<span class="stat"><strong>{{ report.pages|length }}/{{ report.max_pages }}</strong> trang đã quét</span>{% endif %}
+      {% if report.pages or report.auth_pages %}<span class="stat"><strong>{{ report.pages|length + report.auth_pages|length }}/{{ report.max_pages }}</strong> trang đã quét</span>{% endif %}
+      {% if report.auth_page_selected_paths %}<span class="stat"><strong>{{ report.auth_pages|length }}/{{ report.auth_page_selected_paths|length }}</strong> HTML với phiên</span>{% endif %}
       <span class="stat"><strong>{{ report.api_endpoints|length }}/{{ report.api_requested }}</strong> API đã kiểm tra</span>
-      {% if report.api_auth_mode != 'not_configured' %}<span class="stat"><strong>{{ report.api_endpoints|selectattr('api_auth_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }}</strong> API thử với tài khoản</span>{% endif %}
+      {% if report.api_auth_requested %}<span class="stat"><strong>{{ report.api_endpoints|selectattr('api_auth_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }}</strong> API thử với tài khoản</span>{% endif %}
       {% if report.api_compare_requested %}<span class="stat"><strong>{{ report.api_endpoints|selectattr('api_compared_pointers')|list|length }}/{{ report.api_compare_requested }}</strong> API so sánh hai tài khoản</span>{% endif %}
       {% if report.api_cors_browser_enabled %}<span class="stat"><strong>{{ report.api_cors_browser_requested - report.api_cors_browser_skipped_paths|length }}/{{ report.api_cors_browser_requested }}</strong> API thử trong trình duyệt</span>{% endif %}
       <span class="stat high"><strong>{{ counts.HIGH }}</strong> mức cao</span>
@@ -25,20 +26,23 @@
 </section>
 <section class="panel coverage-card" aria-labelledby="coverage-title">
   <h2 id="coverage-title">Phạm vi của điểm số</h2>
-  <p>Điểm chỉ phản ánh {{ report.pages|length }} trang HTML và {{ report.api_endpoints|length }} endpoint API đã kiểm tra, cùng các kiểm tra chung của website. Các URL và API chưa kiểm tra không được tính vào điểm.</p>
+  <p>Điểm chỉ phản ánh {{ report.pages|length }} trang HTML công khai, {{ report.auth_pages|length }} trang HTML với phiên thử nghiệm và {{ report.api_endpoints|length }} endpoint API đã kiểm tra, cùng các kiểm tra chung của website. Các URL và API chưa kiểm tra không được tính vào điểm.</p>
   <p>“Có bằng chứng” nghĩa là quan sát trực tiếp cấu hình hoặc phản hồi, không khẳng định đã khai thác được. “Nghi ngờ” cần kiểm tra thủ công; “Không kết luận được” là phép kiểm tra thiếu dữ liệu. Mục “Nếu không sửa” mô tả tình huống có thể xảy ra, không xác nhận đã có khai thác. Ngoại lệ có thời hạn không thay đổi phát hiện hoặc điểm gốc.</p>
   <div class="coverage-grid">
-    <span><strong>HTML</strong>{{ report.pages|length }} trang / giới hạn {{ report.max_pages }}; {{ report.skipped_urls }} URL phát hiện nhưng bỏ qua hoặc chưa quét</span>
+    <span><strong>HTML</strong>{{ report.pages|length + report.auth_pages|length }} trang / giới hạn {{ report.max_pages }}; {{ report.skipped_urls }} URL công khai phát hiện nhưng bỏ qua hoặc chưa quét</span>
+    {% if report.auth_page_selected_paths %}<span><strong>HTML với phiên</strong>{{ report.auth_pages|length }}/{{ report.auth_page_selected_paths|length }} path đã chọn có phản hồi HTML 2xx; {{ report.auth_pages|selectattr('auth_verified', 'equalto', true)|list|length }} path xác minh được ẩn danh bị từ chối hoặc chuyển hướng</span>{% endif %}
     {% if report.js_discovery_enabled %}<span><strong>JavaScript</strong>{% if report.js_discovery_status == 'completed' %}Đã khám phá{% elif report.js_discovery_status == 'partial' %}Khám phá một phần{% else %}Không chạy được{% endif %}; {{ report.js_discovered_urls }} URL mới{% if report.js_discovery_error %} · {{ report.js_discovery_error }}{% endif %}</span>{% endif %}
     <span><strong>OpenAPI</strong>{% if report.openapi_status == 'loaded' %}Đã liệt kê {{ report.api_discovered }} thao tác; chưa tự động kiểm tra các route này{% elif report.openapi_status == 'not_requested' %}Chưa yêu cầu đọc{% elif report.openapi_status == 'invalid' %}Tài liệu không phải OpenAPI hợp lệ{% elif report.openapi_status == 'unavailable' %}Không truy cập được tài liệu{% else %}Không đọc được tài liệu ({{ report.openapi_status }}){% endif %}</span>
     <span><strong>API</strong>{{ report.api_endpoints|length }}/{{ report.api_requested }} endpoint đã chọn được kiểm tra; {{ report.api_skipped }} bỏ qua{% if not report.api_requested %} · Chưa kiểm tra truy cập API{% endif %}</span>
     {% if report.api_requested %}<span><strong>CORS OPTIONS</strong>{{ report.api_endpoints|selectattr('api_cors_preflight_status_code', 'ne', none)|list|length }}/{{ report.api_requested }} endpoint có phản hồi preflight</span>{% endif %}
-    <span><strong>Phiên thử nghiệm</strong>{% if report.api_auth_mode == 'not_configured' %}Chưa dùng tài khoản thử nghiệm{% else %}{{ report.api_endpoints|selectattr('api_auth_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }} API dự kiến riêng tư đã nhận phản hồi qua {{ 'Cookie' if report.api_auth_mode == 'cookie' else 'Bearer token' }}{% endif %}</span>
+    <span><strong>Phiên thử nghiệm</strong>{% if report.api_auth_mode == 'not_configured' %}Chưa dùng tài khoản thử nghiệm{% elif report.api_auth_requested %}{{ report.api_endpoints|selectattr('api_auth_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }} API dự kiến riêng tư đã nhận phản hồi qua {{ 'Cookie' if report.api_auth_mode == 'cookie' else 'Bearer token' }}{% else %}Đã dùng cho trang HTML đã chọn; chưa chọn API riêng tư{% endif %}</span>
     {% if report.api_auth_requested %}<span><strong>CORS có phiên</strong>{{ report.api_endpoints|selectattr('api_cors_credentialed_status_code', 'ne', none)|list|length }}/{{ report.api_auth_requested }} API riêng tư có phản hồi GET từ Origin thử nghiệm</span>{% endif %}
     {% if report.api_cors_browser_enabled %}<span><strong>Trình duyệt</strong>{{ report.api_cors_browser_requested - report.api_cors_browser_skipped_paths|length }}/{{ report.api_cors_browser_requested }} API riêng tư đã xác minh; chỉ thử mã HTTP, không đọc body</span>{% endif %}
     {% if report.api_compare_requested %}<span><strong>Hai tài khoản</strong>{{ report.api_endpoints|selectattr('api_compared_pointers')|list|length }}/{{ report.api_compare_requested }} API có trường JSON so sánh được; chỉ lưu kết quả trùng/khác</span>{% endif %}
   </div>
   {% if report.api_skipped_paths %}<p>API đã chọn nhưng chưa kiểm tra: {% for path in report.api_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.auth_page_skipped_paths %}<p>Trang HTML với phiên chưa kiểm tra được (không có phản hồi HTML 2xx): {% for path in report.auth_page_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+  {% if report.auth_page_unverified_paths %}<p>Chưa xác minh được trang chỉ dành cho người đăng nhập tại: {% for path in report.auth_page_unverified_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}. Hãy kiểm tra thủ công để chắc chắn phiên đã vào đúng trang.</p>{% endif %}
   {% if report.api_selected_paths %}<p>Path API đã chọn: {% for path in report.api_selected_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
   {% if report.api_auth_skipped_paths %}<p>Phiên thử nghiệm chưa kiểm tra được: {% for path in report.api_auth_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
   {% if report.api_cors_preflight_skipped_paths %}<p>Preflight OPTIONS chưa kiểm tra được: {% for path in report.api_cors_preflight_skipped_paths %}<code>{{ path }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
@@ -75,10 +79,21 @@
 </section>
 {% endfor %}
 {% else %}
-<p class="report-note">Điểm số chỉ dựa trên cấu hình và thông tin công khai của trang được quét. Một điểm cao không xác nhận website không có lỗ hổng.</p>
+<p class="report-note">Điểm số chỉ dựa trên các phản hồi đã kiểm tra. Một điểm cao không xác nhận website không có lỗ hổng.</p>
 <div class="section-heading"><h2>Chi tiết phát hiện</h2><span>Ưu tiên từ mức cao đến thông tin</span></div>
 {% set categories = report.results %}{% set section_id = 'site' %}{% set surface = 'site' %}{% set location = report.final_url %}
 {% include "_categories.html" %}
+{% endif %}
+{% if report.auth_pages %}
+<div class="section-heading"><h2>Trang HTML với phiên thử nghiệm</h2><span>{{ report.auth_pages|length }} trang đã chọn</span></div>
+{% for page in report.auth_pages %}
+<section class="page-report" id="auth-page-{{ loop.index }}">
+  <h3>{{ '%02d'|format(loop.index) }} · {{ page.final_url }}</h3>
+  <p class="report-note">Với phiên HTTP {{ page.status_code }} · Ẩn danh HTTP {{ page.auth_anonymous_status_code if page.auth_anonymous_status_code is not none else 'chưa có phản hồi' }} · {% if page.auth_verified %}Đã xác minh ẩn danh bị từ chối hoặc chuyển hướng{% else %}Chưa xác minh được quyền truy cập sau đăng nhập{% endif %} · Điểm {{ report.page_score(page) }}/100. Chỉ đọc HTML để kiểm tra cấu hình; không lưu nội dung hoặc giá trị phiên.</p>
+  {% set categories = page.results %}{% set section_id = 'auth-page-' ~ loop.index %}{% set surface = 'auth_html' %}{% set location = page.final_url %}
+  {% include "_categories.html" %}
+</section>
+{% endfor %}
 {% endif %}
 {% if report.api_endpoints %}
 <div class="section-heading"><h2>Endpoint API đã kiểm tra</h2><span>{{ report.api_endpoints|length }} endpoint GET</span></div>

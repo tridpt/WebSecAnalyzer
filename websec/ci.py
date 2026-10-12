@@ -25,6 +25,8 @@ def load_baseline(path: Path) -> ScanReport:
             raise ValueError("missing categories")
         if not isinstance(data.get("pages", []), list):
             raise ValueError("invalid pages")
+        if not isinstance(data.get("auth_pages", []), list):
+            raise ValueError("invalid auth pages")
         if not isinstance(data.get("url"), str) or not data["url"]:
             raise ValueError("invalid URL")
         return ScanReport.from_dict(data)

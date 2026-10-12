@@ -87,6 +87,10 @@ def main(argv: list[str] | None = None) -> int:
         "--api-private-url", action="append", default=[], metavar="/api/account",
         help="Like --api-url, but flag HTTP 2xx without authentication as high risk",
     )
+    parser.add_argument(
+        "--auth-html-url", action="append", default=[], metavar="/dashboard",
+        help="Scan an explicit HTML path with the test session (max 10; requires auth env)",
+    )
     credential_group = parser.add_mutually_exclusive_group()
     credential_group.add_argument(
         "--auth-cookie-env", metavar="NAME",
@@ -187,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             lockfile=lockfile,
             openapi_path=args.openapi_path,
             api_paths=args.api_url + [f"private {path}" for path in args.api_private_url],
+            auth_html_paths=args.auth_html_url,
             api_credential=credential,
             api_second_credential=second_credential,
             api_compare_fields=args.api_compare_field,

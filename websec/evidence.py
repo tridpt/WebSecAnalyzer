@@ -198,6 +198,8 @@ def snapshot_response(
 def evidence_bundle(report: ScanReport) -> dict:
     """Map every finding to its relevant redacted HTTP observations."""
     surfaces = [("site", report)] + [("html", page) for page in report.pages] + [
+        ("auth_html", page) for page in report.auth_pages
+    ] + [
         ("api", endpoint) for endpoint in report.api_endpoints
     ]
     records = []

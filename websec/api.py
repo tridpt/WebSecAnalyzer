@@ -39,6 +39,16 @@ class ApiCredential:
             return {"Accept": "application/json", "Cookie": self.secret}
         return {"Accept": "application/json", "Authorization": f"Bearer {self.secret}"}
 
+    def redaction_values(self) -> list[str]:
+        """Include individual cookie values, which a server might reflect alone."""
+        values = [self.secret]
+        if self.mode == "cookie":
+            values.extend(
+                part.strip().partition("=")[2].strip()
+                for part in self.secret.split(";") if "=" in part
+            )
+        return [value for value in values if value]
+
 
 def parse_api_credential(mode: str | None, secret: str | None) -> ApiCredential | None:
     """Only accept a Cookie value or Bearer token for explicit same-origin GETs."""
@@ -81,17 +91,17 @@ def validate_api_auth_transport(url: str, resolved_ip: str) -> None:
         )
 
 
-def _safe_path(raw: str) -> str:
+def _safe_path(raw: str, *, label: str = "API endpoint") -> str:
     value = raw.strip()
     if (
         not value.startswith("/") or value.startswith("//")
         or len(value) > 500 or any(ord(char) < 33 for char in value)
         or "\\" in value or "{" in value or "}" in value
     ):
-        raise InvalidTarget("API endpoint phải là path cùng website, không có tham số mẫu.")
+        raise InvalidTarget(f"{label} phải là path cùng website, không có tham số mẫu.")
     parsed = urlsplit(value)
     if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
-        raise InvalidTarget("API endpoint không được chứa tên miền, query hoặc fragment.")
+        raise InvalidTarget(f"{label} không được chứa tên miền, query hoặc fragment.")
     decoded = parsed.path
     for _ in range(3):
         expanded = unquote(decoded)
@@ -103,10 +113,10 @@ def _safe_path(raw: str) -> str:
         or "//" in decoded
         or any(char.isspace() or ord(char) < 33 for char in decoded)
     ):
-        raise InvalidTarget("API endpoint chứa ký tự mã hóa không an toàn.")
+        raise InvalidTarget(f"{label} chứa ký tự mã hóa không an toàn.")
     segments = set(decoded.lower().split("/"))
     if segments & (_STATE_CHANGING_SEGMENTS | {".", ".."}):
-        raise InvalidTarget("Không quét endpoint có đường dẫn thường dùng để đổi trạng thái.")
+        raise InvalidTarget(f"Không quét {label.lower()} có đường dẫn thường dùng để đổi trạng thái.")
     return value
 
 

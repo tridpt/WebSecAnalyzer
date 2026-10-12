@@ -44,9 +44,19 @@ def render_text(report: ScanReport, use_color: bool = True) -> str:
     )
     if report.pages:
         lines.append(
-            f"  Pages checked: {len(report.pages)}/{report.max_pages}; "
+            f"  Public pages checked: {len(report.pages)}; "
             f"other discovered URLs not checked: {report.skipped_urls}"
         )
+    if report.auth_page_selected_paths:
+        lines.append(
+            f"  Test-session HTML pages: {len(report.auth_pages)}/"
+            f"{len(report.auth_page_selected_paths)}; "
+            f"access verified: {sum(page.auth_verified is True for page in report.auth_pages)}."
+        )
+        if report.auth_page_skipped_paths:
+            lines.append("  Test-session HTML paths not checked: " + ", ".join(report.auth_page_skipped_paths))
+        if report.auth_page_unverified_paths:
+            lines.append("  Session access unverified at: " + ", ".join(report.auth_page_unverified_paths))
     if report.js_discovery_enabled:
         lines.append(
             f"  JavaScript link discovery: {report.js_discovery_status}; "
@@ -55,11 +65,12 @@ def render_text(report: ScanReport, use_color: bool = True) -> str:
         if report.js_discovery_error:
             lines.append(f"  JavaScript discovery note: {report.js_discovery_error}")
     lines.append(
-        f"  Checked scope: {len(report.pages)} HTML page(s), "
+        f"  Checked scope: {len(report.pages)} public and {len(report.auth_pages)} "
+        f"test-session HTML page(s), "
         f"{len(report.api_endpoints)}/{report.api_requested} selected API endpoint(s); "
         f"OpenAPI: {report.openapi_status}, {report.api_discovered} operation(s) listed."
     )
-    if report.api_auth_mode != "not_configured":
+    if report.api_auth_requested:
         checked_auth = sum(
             endpoint.api_auth_status_code is not None for endpoint in report.api_endpoints
         )
@@ -143,12 +154,21 @@ def render_text(report: ScanReport, use_color: bool = True) -> str:
                     lines.append(f"         Evidence: {finding.evidence}")
             lines.append("")
 
-    if report.pages or report.api_endpoints:
+    if report.pages or report.auth_pages or report.api_endpoints:
         lines.append("Website-wide checks:")
         append_results(report.results)
         for index, page in enumerate(report.pages, 1):
             lines.append(
                 f"Page {index}: {page.final_url} (HTTP {page.status_code}, "
+                f"score {report.page_score(page)}/100)"
+            )
+            append_results(page.results)
+        for index, page in enumerate(report.auth_pages, 1):
+            lines.append(
+                f"Test-session HTML {index}: {page.final_url} "
+                f"(HTTP {page.status_code}, anonymous HTTP "
+                f"{page.auth_anonymous_status_code if page.auth_anonymous_status_code is not None else 'unknown'}, "
+                f"access {'verified' if page.auth_verified else 'unverified'}, "
                 f"score {report.page_score(page)}/100)"
             )
             append_results(page.results)
@@ -199,13 +219,17 @@ def to_dict(report: ScanReport) -> dict:
         "api_cors_credentialed_status_code": report.api_cors_credentialed_status_code,
         "api_cors_browser_outcome": report.api_cors_browser_outcome,
         "api_compared_pointers": report.api_compared_pointers,
+        "auth_anonymous_status_code": report.auth_anonymous_status_code,
+        "auth_verified": report.auth_verified,
         "observations": report.observations,
         "overall_score": report.overall_score,
         "max_pages": report.max_pages,
         "skipped_urls": report.skipped_urls,
-        "page_count": len(report.pages) if report.pages else 1,
+        "page_count": len(report.pages) + len(report.auth_pages) if (report.pages or report.auth_pages) else 1,
+        "auth_page_count": len(report.auth_pages),
         "api_endpoint_count": len(report.api_endpoints),
         "pages": [to_dict(page) for page in report.pages],
+        "auth_pages": [to_dict(page) for page in report.auth_pages],
         "api_endpoints": [to_dict(endpoint) for endpoint in report.api_endpoints],
         "api_routes": report.api_routes,
         "coverage": {
@@ -214,6 +238,10 @@ def to_dict(report: ScanReport) -> dict:
             "html_pages_checked": len(report.pages),
             "html_page_limit": report.max_pages,
             "html_urls_not_checked": report.skipped_urls,
+            "auth_html_selected_paths": report.auth_page_selected_paths,
+            "auth_html_checked": len(report.auth_pages),
+            "auth_html_skipped_paths": report.auth_page_skipped_paths,
+            "auth_html_unverified_paths": report.auth_page_unverified_paths,
             "js_discovery_enabled": report.js_discovery_enabled,
             "js_discovery_status": report.js_discovery_status,
             "js_discovered_urls": report.js_discovered_urls,

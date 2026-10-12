@@ -33,6 +33,25 @@
       <label class="check-label">Lockfile (tùy chọn) <input type="file" name="lockfile" accept=".json,.yaml" aria-label="package-lock.json hoặc pnpm-lock.yaml"></label>
     </div>
     <details class="api-options">
+      <summary>Trang HTML sau đăng nhập và phiên thử nghiệm (tùy chọn)</summary>
+      <label>Path HTML cần kiểm tra (tối đa 10, mỗi dòng một path)
+        <textarea name="auth_html_paths" rows="3" placeholder="/dashboard&#10;/account/settings" aria-label="Danh sách trang HTML sau đăng nhập">{{ request.form.get('auth_html_paths', '') }}</textarea>
+      </label>
+      <div class="api-option-grid auth-options">
+        <label>Phiên tài khoản A (dùng cho trang HTML và API riêng tư)
+          <select name="api_auth_mode" aria-label="Loại phiên tài khoản thử nghiệm">
+            <option value="none">Không dùng</option>
+            <option value="cookie" {{ 'selected' if request.form.get('api_auth_mode') == 'cookie' else '' }}>Giá trị Cookie</option>
+            <option value="bearer" {{ 'selected' if request.form.get('api_auth_mode') == 'bearer' else '' }}>Bearer token</option>
+          </select>
+        </label>
+        <label>Giá trị phiên A tạm thời
+          <input type="password" name="api_auth_secret" maxlength="4096" autocomplete="off" placeholder="session=... hoặc chỉ token Bearer" aria-label="Giá trị phiên thử nghiệm">
+        </label>
+      </div>
+      <p>Chỉ nhập path cùng website, không có query, ví dụ <code>/dashboard</code>. Công cụ gửi GET ẩn danh để kiểm tra khả năng truy cập, rồi GET với phiên A để đọc HTML. Không theo chuyển hướng, không đăng nhập tự động và không lưu giá trị phiên hay nội dung trang. Chỉ dùng phiên của tài khoản thử nghiệm quyền thấp. Giới hạn 30 trang bao gồm cả trang công khai và trang có phiên; các URL này không được tự động crawl tiếp.</p>
+    </details>
+    <details class="api-options">
       <summary>Quét API tùy chọn</summary>
       <div class="api-option-grid">
         <label>Path OpenAPI để liệt kê route
@@ -47,18 +66,6 @@
       <div id="openapi-route-picker" class="openapi-route-picker" hidden>
         <div id="openapi-route-list" class="openapi-route-list"></div>
         <button type="button" class="text-btn" id="add-openapi-routes">Thêm GET đã chọn vào danh sách quét</button>
-      </div>
-      <div class="api-option-grid auth-options">
-        <label>Phiên tài khoản A (tùy chọn)
-          <select name="api_auth_mode" aria-label="Loại phiên tài khoản thử nghiệm">
-            <option value="none">Không dùng</option>
-            <option value="cookie" {{ 'selected' if request.form.get('api_auth_mode') == 'cookie' else '' }}>Giá trị Cookie</option>
-            <option value="bearer" {{ 'selected' if request.form.get('api_auth_mode') == 'bearer' else '' }}>Bearer token</option>
-          </select>
-        </label>
-        <label>Giá trị phiên A tạm thời
-          <input type="password" name="api_auth_secret" maxlength="4096" autocomplete="off" placeholder="session=... hoặc chỉ token Bearer" aria-label="Giá trị phiên thử nghiệm">
-        </label>
       </div>
       <label class="check-label"><input type="checkbox" name="browser_cors" {{ 'checked' if request.form.get('browser_cors') == 'on' else '' }}> Xác minh CORS bằng trình duyệt cô lập trên API riêng tư đã chọn</label>
       <label>Thuộc tính Cookie thật khi dùng phép thử trình duyệt (không nhập giá trị Cookie)

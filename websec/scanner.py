@@ -8,6 +8,7 @@ from urllib.parse import urljoin, urlsplit
 import requests
 
 from .cookies import check_cookies
+from .auth_html import parse_auth_html_paths, redact_result_values
 from .api import (
     ApiCredential, check_api_access, check_api_auth_comparison,
     check_api_cross_account, check_api_headers, parse_api_credential,
@@ -53,10 +54,16 @@ class ScanReport:
     status_code: int
     results: list[CheckResult] = field(default_factory=list)
     pages: list[ScanReport] = field(default_factory=list)
+    auth_pages: list[ScanReport] = field(default_factory=list)
     api_endpoints: list[ScanReport] = field(default_factory=list)
     api_routes: list[dict] = field(default_factory=list)
     skipped_urls: int = 0
     max_pages: int = 1
+    auth_page_selected_paths: list[str] = field(default_factory=list)
+    auth_page_skipped_paths: list[str] = field(default_factory=list)
+    auth_page_unverified_paths: list[str] = field(default_factory=list)
+    auth_anonymous_status_code: int | None = None
+    auth_verified: bool | None = None
     api_discovered: int = 0
     api_requested: int = 0
     api_selected_paths: list[str] = field(default_factory=list)
@@ -96,6 +103,9 @@ class ScanReport:
         for page in self.pages:
             for severity, count in page.issue_counts.items():
                 counts[severity] += count
+        for page in self.auth_pages:
+            for severity, count in page.issue_counts.items():
+                counts[severity] += count
         for endpoint in self.api_endpoints:
             for severity, count in endpoint.issue_counts.items():
                 counts[severity] += count
@@ -105,12 +115,15 @@ class ScanReport:
     def checked_categories(self) -> int:
         return sum(result.error is None for result in self.results) + sum(
             page.checked_categories for page in self.pages
-        ) + sum(endpoint.checked_categories for endpoint in self.api_endpoints)
+        ) + sum(page.checked_categories for page in self.auth_pages) + sum(
+            endpoint.checked_categories for endpoint in self.api_endpoints
+        )
 
     @property
     def total_categories(self) -> int:
         return (len(self.results)
                 + sum(page.total_categories for page in self.pages)
+                + sum(page.total_categories for page in self.auth_pages)
                 + sum(endpoint.total_categories for endpoint in self.api_endpoints))
 
     @staticmethod
@@ -124,7 +137,7 @@ class ScanReport:
 
     @property
     def overall_score(self) -> int:
-        checked = self.pages + self.api_endpoints
+        checked = self.pages + self.auth_pages + self.api_endpoints
         if checked:
             # The weakest checked HTML page or API endpoint determines the score.
             return min(self.page_score(page) for page in checked)
@@ -139,6 +152,17 @@ class ScanReport:
             status_code=data["status_code"],
             skipped_urls=data.get("skipped_urls", 0),
             max_pages=data.get("max_pages", 1),
+            auth_page_selected_paths=data.get("coverage", {}).get(
+                "auth_html_selected_paths", []
+            ),
+            auth_page_skipped_paths=data.get("coverage", {}).get(
+                "auth_html_skipped_paths", []
+            ),
+            auth_page_unverified_paths=data.get("coverage", {}).get(
+                "auth_html_unverified_paths", []
+            ),
+            auth_anonymous_status_code=data.get("auth_anonymous_status_code"),
+            auth_verified=data.get("auth_verified"),
             api_routes=data.get("api_routes", []),
             api_discovered=data.get("coverage", {}).get("api_routes_discovered", 0),
             api_requested=data.get("coverage", {}).get("api_endpoints_requested", 0),
@@ -209,6 +233,7 @@ class ScanReport:
                 )
             report.results.append(result)
         report.pages = [cls.from_dict(page) for page in data.get("pages", [])]
+        report.auth_pages = [cls.from_dict(page) for page in data.get("auth_pages", [])]
         report.api_endpoints = [
             cls.from_dict(endpoint) for endpoint in data.get("api_endpoints", [])
         ]
@@ -239,6 +264,7 @@ def scan(
     openapi_path: str | None = None,
     api_paths: list[str] | None = None,
     api_credential: ApiCredential | None = None,
+    auth_html_paths: list[str] | None = None,
     api_second_credential: ApiCredential | None = None,
     api_compare_fields: list[str] | None = None,
     browser_cors: bool = False,
@@ -256,12 +282,19 @@ def scan(
     control = control or ScanControl(max_seconds=max_seconds)
     packages = parse_lockfile(*lockfile) if lockfile else None
     api_targets = parse_api_targets(api_paths)
+    selected_auth_html = parse_auth_html_paths(auth_html_paths)
+    if len(selected_auth_html) >= max_pages:
+        raise InvalidTarget("Giới hạn trang phải lớn hơn số trang sau đăng nhập đã chọn.")
     compare_fields = parse_comparison_fields(api_compare_fields, api_targets)
     openapi_path = validate_openapi_path(openapi_path)
     if api_credential is not None:
-        if not isinstance(api_credential, ApiCredential) or not api_targets:
-            raise InvalidTarget("Phiên thử nghiệm chỉ dùng khi đã chọn endpoint API GET.")
+        if not isinstance(api_credential, ApiCredential) or not (
+            api_targets or selected_auth_html
+        ):
+            raise InvalidTarget("Phiên thử nghiệm cần API GET hoặc trang HTML đã chọn.")
         api_credential = parse_api_credential(api_credential.mode, api_credential.secret)
+    if selected_auth_html and api_credential is None:
+        raise InvalidTarget("Trang sau đăng nhập cần Cookie hoặc Bearer token của tài khoản thử nghiệm.")
     cookie_attributes = validate_browser_options(
         browser_cors, api_credential, browser_cookie_attributes,
     )
@@ -281,8 +314,10 @@ def scan(
         raise InvalidTarget("Hai phiên thử nghiệm phải khác nhau.")
 
     secrets_to_redact = [
-        credential.secret for credential in (api_credential, api_second_credential)
+        value
+        for credential in (api_credential, api_second_credential)
         if credential is not None
+        for value in credential.redaction_values()
     ]
 
     def capture(response: requests.Response, **kwargs) -> dict:
@@ -294,7 +329,7 @@ def scan(
     url = normalize_target(url, allow_private=allow_private, dns=dns)
     pacer = RequestPacer(
         max_requests=max_pages * 2 + 8 + len(api_targets) * (5 if api_credential else 3)
-        + len(compare_fields)
+        + len(compare_fields) + 2 * len(selected_auth_html)
         + (1 if openapi_path else 0)
         + (3 * len(api_targets) if browser_cors else 0)
         + (min(MAX_SCRIPT_REQUESTS, max_pages * MAX_SCRIPTS_PER_PAGE)
@@ -360,7 +395,7 @@ def scan(
 
         try:
             page_responses, skipped, js_count = crawl_pages(
-                session, url, first, max_pages=max_pages, timeout=timeout,
+                session, url, first, max_pages=max_pages - len(selected_auth_html), timeout=timeout,
                 allow_private=allow_private, pacer=pacer, control=control,
                 discover_links=discover_rendered if js_browser else None,
             )
@@ -406,6 +441,100 @@ def scan(
                     ),
                 ],
             ))
+        auth_pages: list[ScanReport] = []
+        auth_page_skipped_paths: list[str] = []
+        auth_page_unverified_paths: list[str] = []
+        if selected_auth_html and api_credential:
+            anonymous_html_session = guarded_session(dns)
+            authenticated_html_session = guarded_session(dns)
+            anonymous_html_session.headers["User-Agent"] = USER_AGENT
+            authenticated_html_session.headers["User-Agent"] = USER_AGENT
+            site_origin = origin(first.url)
+            loopback = is_loopback_host(urlsplit(first.url).hostname)
+            try:
+                hostname = urlsplit(first.url).hostname or ""
+                validate_api_auth_transport(
+                    first.url, dns.verify(hostname, site_origin[2])
+                )
+                for path in selected_auth_html:
+                    control.check()
+                    page_url = urljoin(first.url, path)
+                    anonymous = None
+                    try:
+                        anonymous_html_session.cookies.clear()
+                        anonymous = fetch(
+                            anonymous_html_session, page_url,
+                            timeout=timeout, allow_private=allow_private,
+                            pacer=pacer, expected_origin=site_origin,
+                            initial_loopback=loopback, control=control,
+                            read_body=False, follow_redirects=False,
+                            request_headers={"Accept": "text/html"},
+                        )
+                    except DNSChanged:
+                        raise
+                    except (InvalidTarget, requests.RequestException):
+                        pass
+                    try:
+                        authenticated_html_session.cookies.clear()
+                        authenticated = fetch(
+                            authenticated_html_session, page_url,
+                            timeout=timeout, allow_private=allow_private,
+                            pacer=pacer, expected_origin=site_origin,
+                            initial_loopback=loopback, control=control,
+                            follow_redirects=False,
+                            request_headers={
+                                **api_credential.headers(), "Accept": "text/html",
+                            },
+                        )
+                    except DNSChanged:
+                        raise
+                    except (InvalidTarget, requests.RequestException):
+                        auth_page_skipped_paths.append(path)
+                        continue
+                    if not 200 <= authenticated.status_code < 300 or not is_html(authenticated):
+                        auth_page_skipped_paths.append(path)
+                        continue
+                    verified = bool(anonymous and (
+                        anonymous.status_code in {401, 403} or anonymous.is_redirect
+                    ))
+                    if not verified:
+                        auth_page_unverified_paths.append(path)
+                    auth_results = [
+                        check_headers(authenticated),
+                        check_csp(authenticated),
+                        check_cors(authenticated),
+                        check_cookies(authenticated),
+                    ]
+                    if authenticated.url.lower().startswith("https://"):
+                        auth_results.append(check_html_resources(authenticated))
+                    if packages is None:
+                        auth_results.append(check_libraries(
+                            authenticated, use_osv=use_osv,
+                            advisory_cache=advisory_cache, control=control,
+                        ))
+                    redact_result_values(auth_results, secrets_to_redact)
+                    auth_pages.append(ScanReport(
+                        url=page_url, final_url=authenticated.url,
+                        status_code=authenticated.status_code,
+                        auth_anonymous_status_code=(
+                            anonymous.status_code if anonymous is not None else None
+                        ),
+                        auth_verified=verified,
+                        results=auth_results,
+                        observations=[
+                            *(
+                                [capture(anonymous, purpose="auth_html_anonymous")]
+                                if anonymous is not None else []
+                            ),
+                            capture(
+                                authenticated, purpose="page",
+                                credential_mode=api_credential.mode,
+                            ),
+                        ],
+                    ))
+            finally:
+                anonymous_html_session.close()
+                authenticated_html_session.close()
         api_routes: list[dict] = []
         api_discovered = 0
         api_skipped = 0
@@ -710,6 +839,7 @@ def scan(
                                 ))
                         if browser_outcome == "inconclusive":
                             api_cors_browser_skipped_paths.append(target.path)
+                    redact_result_values(endpoint_results, secrets_to_redact)
                     api_endpoints.append(ScanReport(
                         url=endpoint_url, final_url=response.url,
                         status_code=response.status_code,
@@ -738,10 +868,14 @@ def scan(
             status_code=first.status_code,
             results=site_results,
             pages=pages,
+            auth_pages=auth_pages,
             api_endpoints=api_endpoints,
             api_routes=api_routes,
             skipped_urls=skipped,
             max_pages=max_pages,
+            auth_page_selected_paths=selected_auth_html,
+            auth_page_skipped_paths=auth_page_skipped_paths,
+            auth_page_unverified_paths=auth_page_unverified_paths,
             api_discovered=api_discovered,
             api_requested=len(api_targets),
             api_selected_paths=[target.path for target in api_targets],

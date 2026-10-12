@@ -10,6 +10,8 @@ def _checked_surfaces(report: ScanReport) -> set[tuple[str, str]]:
     return (
         {("site", report.final_url)}
         | {("html", page.final_url) for page in report.pages}
+        | {("auth_html", page.final_url) for page in report.auth_pages
+           if page.auth_verified is True}
         | {("api", endpoint.final_url) for endpoint in report.api_endpoints}
     )
 
@@ -41,6 +43,8 @@ def _issues(report: ScanReport) -> dict[tuple[str, str, str, str, str], dict]:
     collect("site", report.final_url, report.results)
     for page in report.pages:
         collect("html", page.final_url, page.results)
+    for page in report.auth_pages:
+        collect("auth_html", page.final_url, page.results)
     for endpoint in report.api_endpoints:
         collect("api", endpoint.final_url, endpoint.results)
     return issues
@@ -57,6 +61,8 @@ def compare_reports(old: ScanReport, new: ScanReport) -> dict:
         "old_score": old.overall_score, "new_score": new.overall_score,
         "scope_changed": old_scope != new_scope,
         "old_html_count": len(old.pages), "new_html_count": len(new.pages),
+        "old_auth_html_count": len(old.auth_pages),
+        "new_auth_html_count": len(new.auth_pages),
         "old_api_count": len(old.api_endpoints), "new_api_count": len(new.api_endpoints),
         "new_issues": [after[key] for key in sorted(after.keys() - before.keys())],
         "fixed_issues": [before[key] for key in sorted(rechecked)],

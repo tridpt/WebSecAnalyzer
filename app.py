@@ -30,6 +30,7 @@ from websec.api import (
     validate_openapi_path,
 )
 from websec.api_preview import preview_openapi
+from websec.auth_html import parse_auth_html_paths
 from websec.browser_cors import validate_browser_options
 from websec.compare import compare_reports
 from websec.control import ScanControl, ScanStopped
@@ -156,8 +157,12 @@ def index():
             try:
                 openapi_path = (request.form.get("openapi_path") or "").strip() or None
                 api_paths = (request.form.get("api_paths") or "").splitlines()
+                auth_html_paths = (request.form.get("auth_html_paths") or "").splitlines()
                 validate_openapi_path(openapi_path)
                 selected_api = parse_api_targets(api_paths)
+                selected_auth_html = parse_auth_html_paths(auth_html_paths)
+                if len(selected_auth_html) >= max_pages:
+                    raise InvalidTarget("Giới hạn trang phải lớn hơn số trang sau đăng nhập đã chọn.")
                 api_credential = parse_api_credential(
                     request.form.get("api_auth_mode"),
                     request.form.get("api_auth_secret"),
@@ -180,8 +185,10 @@ def index():
                 selected_fields = parse_comparison_fields(
                     api_compare_fields, selected_api
                 )
-                if api_credential and not selected_api:
-                    raise InvalidTarget("Hãy chọn ít nhất một endpoint GET trước khi nhập phiên thử nghiệm.")
+                if api_credential and not (selected_api or selected_auth_html):
+                    raise InvalidTarget("Hãy chọn API GET hoặc trang HTML trước khi nhập phiên thử nghiệm.")
+                if selected_auth_html and not api_credential:
+                    raise InvalidTarget("Trang sau đăng nhập cần Cookie hoặc Bearer token của tài khoản thử nghiệm.")
                 if bool(selected_fields) != bool(api_second_credential) or (
                     api_second_credential and not api_credential
                 ):
@@ -213,6 +220,7 @@ def index():
                     "max_pages": max_pages, "max_seconds": max_seconds,
                     "lockfile": lockfile,
                     "openapi_path": openapi_path, "api_paths": api_paths,
+                    "auth_html_paths": auth_html_paths,
                     "api_credential": api_credential,
                     "api_second_credential": api_second_credential,
                     "api_compare_fields": api_compare_fields,
