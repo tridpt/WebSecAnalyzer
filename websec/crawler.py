@@ -132,8 +132,11 @@ def sitemap_urls(
             continue
         if response.status_code >= 400:
             continue
+        raw_xml = response.content[:512_000]
+        if b"<!ENTITY" in raw_xml.upper() or b"<!DOCTYPE" in raw_xml.upper():
+            continue
         try:
-            root = ElementTree.fromstring(response.content)
+            root = ElementTree.fromstring(raw_xml)
         except ElementTree.ParseError:
             continue
 
